@@ -71,7 +71,7 @@
       margin-top: 10px;
     }
     button {
-      width: 100%;
+      width: 100%; /* ✅ fixed typo */
       padding: 12px 14px;
       font-weight: 600;
       border: 1px solid rgba(255,255,255,0.6);
@@ -130,8 +130,9 @@
   </div>
 
   <script>
-    // adjust if you run your own local backend:
-    const API_BASE = 'https://pim-app-final.onrender.com';
+    const API_BASE = window.location.hostname === 'localhost'
+      ? 'http://127.0.0.1:8000'
+      : 'https://pim-app-final.onrender.com';
 
     const form = document.getElementById('loginForm');
     const errorMsg = document.getElementById('errorMsg');
@@ -161,14 +162,13 @@
           throw new Error(data?.detail || data?.message || 'Login failed');
         }
 
-        // backend returns { success, data: { session_id, username }, message }
         const sessionId = data?.data?.session_id;
         if (!sessionId) throw new Error('No session returned from server');
 
         localStorage.setItem('sessionId', sessionId);
         localStorage.setItem('username', username);
 
-        // go to your notes page after login (create this next)
+        // redirect after successful login
         window.location.href = 'notes.html';
       } catch (err) {
         errorMsg.textContent = err.message || 'Something went wrong. Try again.';

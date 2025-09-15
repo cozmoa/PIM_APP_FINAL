@@ -1,18 +1,24 @@
-from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, field_validator
 from typing import Optional, List
-import json
 from datetime import datetime
-from database import NoteDatabase
-
-# Import your existing system class
-from main import NoteDatabaseSystem
+import json
+import os
+from backend.database import NoteDatabase
+from backend.main import NoteDatabaseSystem
 
 app = FastAPI(title="Notes & Todos API", version="1.0.0")
 
-# Add CORS middleware - ESSENTIAL for frontend
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # project root
+FRONTEND_DIR = os.path.join(BASE_DIR, "frontend")
+
+app.mount("/frontend", StaticFiles(directory=FRONTEND_DIR), name="frontend")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173"],  # React/Vite default ports
