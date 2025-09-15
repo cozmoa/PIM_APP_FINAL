@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, field_validator
 from typing import Optional, List
 from datetime import datetime
-import json
+iimport json
 import os
 from backend.database import NoteDatabase
 from backend.main import NoteDatabaseSystem
@@ -562,6 +562,10 @@ async def root():
         },
         message="Welcome to Notes & Todos API"
     )
+
+@app.get("/")
+async def root():
+    return RedirectResponse(url="/frontend/loading.html")
 
 if __name__ == "__main__":
     import uvicorn
