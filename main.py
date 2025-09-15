@@ -1,43 +1,58 @@
+# main_pim_final.py
 import json
 import uuid
-import time
-import threading
 from typing import Optional, List, Dict, Any
-from database import NoteDatabase
-from datetime import date, datetime, timedelta
-
+from database_pim_final import NoteDatabase
 
 class NoteDatabaseSystem:
     def __init__(self, db_path: str = "notes.db"):
-        self.db = NoteDatabase(db_path)
-        self.active_sessions = {}  # session_id -> username
+        try:
+            self.db = NoteDatabase(db_path)
+            self.active_sessions = {}  # session_id -> username
+        except Exception as e:
+            raise Exception(f"Failed to initialize database: {str(e)}")
 
     def register_user(self, username: str, password: str) -> str:
         """Register a new user"""
-        if self.db.create_user(username, password):
-            return json.dumps({"success": True, "message": "User registered successfully"})
-        else:
-            return json.dumps({"success": False, "message": "Username already exists"})
+        try:
+            if not username.strip() or not password:
+                return json.dumps({"success": False, "message": "Username and password are required"})
+            
+            if self.db.create_user(username.strip(), password):
+                return json.dumps({"success": True, "message": "User registered successfully"})
+            else:
+                return json.dumps({"success": False, "message": "Username already exists"})
+        except Exception as e:
+            return json.dumps({"success": False, "message": f"Registration failed: {str(e)}"})
 
     def login_user(self, username: str, password: str) -> str:
         """Login user and create session"""
-        if self.db.verify_user(username, password):
-            session_id = str(uuid.uuid4())
-            self.active_sessions[session_id] = username
-            return json.dumps({
-                "success": True,
-                "message": "Login successful",
-                "session_id": session_id
-            })
-        else:
-            return json.dumps({"success": False, "message": "Invalid username or password"})
+        try:
+            if not username.strip() or not password:
+                return json.dumps({"success": False, "message": "Username and password are required"})
+            
+            if self.db.verify_user(username.strip(), password):
+                session_id = str(uuid.uuid4())
+                self.active_sessions[session_id] = username.strip()
+                return json.dumps({
+                    "success": True,
+                    "message": "Login successful",
+                    "session_id": session_id
+                })
+            else:
+                return json.dumps({"success": False, "message": "Invalid username or password"})
+        except Exception as e:
+            return json.dumps({"success": False, "message": f"Login failed: {str(e)}"})
 
     def logout_user(self, session_id: str) -> str:
         """Logout user"""
-        if session_id in self.active_sessions:
-            del self.active_sessions[session_id]
-            return json.dumps({"success": True, "message": "Logout successful"})
-        return json.dumps({"success": False, "message": "Invalid session"})
+        try:
+            if session_id in self.active_sessions:
+                del self.active_sessions[session_id]
+                return json.dumps({"success": True, "message": "Logout successful"})
+            return json.dumps({"success": False, "message": "Invalid session"})
+        except Exception as e:
+            return json.dumps({"success": False, "message": f"Logout failed: {str(e)}"})
 
     def _get_username_from_session(self, session_id: str) -> Optional[str]:
         """Get username from session ID"""
@@ -45,308 +60,515 @@ class NoteDatabaseSystem:
 
     def _validate_session(self, session_id: str) -> Optional[int]:
         """Validate session and return user_id"""
-        username = self._get_username_from_session(session_id)
-        if not username:
+        try:
+            username = self._get_username_from_session(session_id)
+            if not username:
+                return None
+            return self.db.get_user_id(username)
+        except Exception:
             return None
-        return self.db.get_user_id(username)
 
     def create_note(self, session_id: str, title: str, content: str) -> str:
         """Create a new note"""
-        user_id = self._validate_session(session_id)
-        if not user_id:
-            return json.dumps({"success": False, "message": "Not logged in"})
+        try:
+            user_id = self._validate_session(session_id)
+            if not user_id:
+                return json.dumps({"success": False, "message": "Not logged in"})
 
-        note_id = self.db.create_note(user_id, title, content)
-        if note_id:
-            return json.dumps({
-                "success": True,
-                "message": "Note created successfully",
-                "note_id": note_id
-            })
-        else:
-            return json.dumps({"success": False, "message": "Note title already exists"})
+            if not title.strip() or not content.strip():
+                return json.dumps({"success": False, "message": "Title and content are required"})
+
+            note_id = self.db.create_note(user_id, title.strip(), content.strip())
+            if note_id:
+                return json.dumps({
+                    "success": True,
+                    "message": "Note created successfully",
+                    "note_id": note_id
+                })
+            else:
+                return json.dumps({"success": False, "message": "Note title already exists"})
+        except Exception as e:
+            return json.dumps({"success": False, "message": f"Failed to create note: {str(e)}"})
 
     def get_note(self, session_id: str, title: str) -> str:
         """Get a specific note by title"""
-        user_id = self._validate_session(session_id)
-        if not user_id:
-            return json.dumps({"success": False, "message": "Not logged in"})
+        try:
+            user_id = self._validate_session(session_id)
+            if not user_id:
+                return json.dumps({"success": False, "message": "Not logged in"})
 
-        note = self.db.get_note_by_title(user_id, title)
-        if note:
-            return json.dumps({"success": True, "note": note})
-        else:
-            return json.dumps({"success": False, "message": "Note not found"})
+            if not title.strip():
+                return json.dumps({"success": False, "message": "Title is required"})
+
+            note = self.db.get_note_by_title(user_id, title.strip())
+            if note:
+                return json.dumps({"success": True, "note": note})
+            else:
+                return json.dumps({"success": False, "message": "Note not found"})
+        except Exception as e:
+            return json.dumps({"success": False, "message": f"Failed to get note: {str(e)}"})
 
     def list_notes(self, session_id: str, limit: int = 50) -> str:
         """List all notes for the user"""
-        user_id = self._validate_session(session_id)
-        if not user_id:
-            return json.dumps({"success": False, "message": "Not logged in"})
+        try:
+            user_id = self._validate_session(session_id)
+            if not user_id:
+                return json.dumps({"success": False, "message": "Not logged in"})
 
-        notes = self.db.get_user_notes(user_id, limit)
+            notes = self.db.get_user_notes(user_id, limit)
 
-        for note in notes:
-            note["preview"] = note["content"][:100] + ("..." if len(note["content"]) > 100 else "")
-            del note["content"]
+            # Create preview for each note
+            for note in notes:
+                note["preview"] = note["content"][:100] + ("..." if len(note["content"]) > 100 else "")
+                # Remove full content from list view
+                del note["content"]
 
-        return json.dumps({"success": True, "notes": notes, "count": len(notes)})
+            return json.dumps({"success": True, "notes": notes, "count": len(notes)})
+        except Exception as e:
+            return json.dumps({"success": False, "message": f"Failed to list notes: {str(e)}"})
 
     def edit_note(self, session_id: str, title: str, new_content: str) -> str:
         """Edit note content"""
-        user_id = self._validate_session(session_id)
-        if not user_id:
-            return json.dumps({"success": False, "message": "Not logged in"})
+        try:
+            user_id = self._validate_session(session_id)
+            if not user_id:
+                return json.dumps({"success": False, "message": "Not logged in"})
 
-        if self.db.update_note_content(user_id, title, new_content):
-            return json.dumps({"success": True, "message": "Note updated successfully"})
-        else:
-            return json.dumps({"success": False, "message": "Note not found"})
+            if not title.strip() or not new_content.strip():
+                return json.dumps({"success": False, "message": "Title and content are required"})
+
+            if self.db.update_note_content(user_id, title.strip(), new_content.strip()):
+                return json.dumps({"success": True, "message": "Note updated successfully"})
+            else:
+                return json.dumps({"success": False, "message": "Note not found"})
+        except Exception as e:
+            return json.dumps({"success": False, "message": f"Failed to edit note: {str(e)}"})
 
     def delete_note(self, session_id: str, title: str) -> str:
         """Delete a note"""
-        user_id = self._validate_session(session_id)
-        if not user_id:
-            return json.dumps({"success": False, "message": "Not logged in"})
+        try:
+            user_id = self._validate_session(session_id)
+            if not user_id:
+                return json.dumps({"success": False, "message": "Not logged in"})
 
-        if self.db.delete_note(user_id, title):
-            return json.dumps({"success": True, "message": "Note deleted successfully"})
-        else:
-            return json.dumps({"success": False, "message": "Note not found"})
+            if not title.strip():
+                return json.dumps({"success": False, "message": "Title is required"})
+
+            if self.db.delete_note(user_id, title.strip()):
+                return json.dumps({"success": True, "message": "Note deleted successfully"})
+            else:
+                return json.dumps({"success": False, "message": "Note not found"})
+        except Exception as e:
+            return json.dumps({"success": False, "message": f"Failed to delete note: {str(e)}"})
 
     def search_notes(self, session_id: str, query: str) -> str:
         """Search notes by keyword"""
-        user_id = self._validate_session(session_id)
-        if not user_id:
-            return json.dumps({"success": False, "message": "Not logged in"})
+        try:
+            user_id = self._validate_session(session_id)
+            if not user_id:
+                return json.dumps({"success": False, "message": "Not logged in"})
 
-        results = self.db.search_user_notes(user_id, query)
+            if not query.strip():
+                return json.dumps({"success": False, "message": "Search query is required"})
 
-        for result in results:
-            result["preview"] = result["content"][:150] + ("..." if len(result["content"]) > 150 else "")
-            del result["content"]
+            results = self.db.search_user_notes(user_id, query.strip())
 
-        return json.dumps({"success": True, "results": results, "count": len(results)})
+            # Create preview for each result
+            for result in results:
+                result["preview"] = result["content"][:150] + ("..." if len(result["content"]) > 150 else "")
+                # Remove full content from search results
+                del result["content"]
+
+            return json.dumps({"success": True, "results": results, "count": len(results)})
+        except Exception as e:
+            return json.dumps({"success": False, "message": f"Search failed: {str(e)}"})
 
     def add_tags(self, session_id: str, title: str, tags: List[str]) -> str:
         """Add tags to a note"""
-        user_id = self._validate_session(session_id)
-        if not user_id:
-            return json.dumps({"success": False, "message": "Not logged in"})
+        try:
+            user_id = self._validate_session(session_id)
+            if not user_id:
+                return json.dumps({"success": False, "message": "Not logged in"})
 
-        all_tags = self.db.add_note_tags(user_id, title, tags)
-        if all_tags is not None:
-            return json.dumps({"success": True, "tags": all_tags})
-        else:
-            return json.dumps({"success": False, "message": "Note not found"})
+            if not title.strip():
+                return json.dumps({"success": False, "message": "Title is required"})
+
+            if not tags or not any(tag.strip() for tag in tags):
+                return json.dumps({"success": False, "message": "At least one valid tag is required"})
+
+            clean_tags = [tag.strip() for tag in tags if tag.strip()]
+            all_tags = self.db.add_note_tags(user_id, title.strip(), clean_tags)
+            if all_tags is not None:
+                return json.dumps({"success": True, "tags": all_tags})
+            else:
+                return json.dumps({"success": False, "message": "Note not found"})
+        except Exception as e:
+            return json.dumps({"success": False, "message": f"Failed to add tags: {str(e)}"})
 
     def get_stats(self, session_id: str) -> str:
         """Get user statistics"""
-        user_id = self._validate_session(session_id)
-        if not user_id:
-            return json.dumps({"success": False, "message": "Not logged in"})
-
-        stats = self.db.get_user_stats(user_id)
-        return json.dumps({"success": True, "stats": stats})
-
-
-user_todos: Dict[str, List[Dict[str, Any]]] = {}  # username -> list of todos
-
-def _ensure_user_todos(username: str) -> None:
-    if username not in user_todos:
-        user_todos[username] = []
-
-def _reminder_worker(username: str, title: str, remind_time: datetime):
-    while datetime.now() < remind_time:
-        time.sleep(10)
-    print(f"\n=== Reminder for {username} ===\nTask: {title}\nTime: {datetime.now()}\n")
-
-def create_todo(
-    username: str,
-    title: str,
-    description: str = "",
-    due_date: str | None = None,
-    priority: str = "normal",
-    tags: list[str] | None = None,
-    note_title: str | None = None,
-    reminder_minutes: int | None = None
-) -> str:
-    _ensure_user_todos(username)
-
-    if priority not in {"low", "normal", "high"}:
-        return json.dumps({"success": False, "message": "Invalid priority"})
-
-    due_date_parsed = None
-    if due_date:
         try:
-            due_date_parsed = datetime.strptime(due_date, "%Y-%m-%d %H:%M")
-        except ValueError:
-            return json.dumps({"success": False, "message": "Due date must be YYYY-MM-DD HH:MM"})
+            user_id = self._validate_session(session_id)
+            if not user_id:
+                return json.dumps({"success": False, "message": "Not logged in"})
 
-    todo = {
-        "id": len(user_todos[username]) + 1,
-        "created": str(date.today()),
-        "title": title,
-        "description": description,
-        "due_date": due_date_parsed.isoformat() if due_date_parsed else None,
-        "priority": priority,
-        "completed": False,
-        "tags": list(set(tags or [])),
-        "note_title": note_title
-    }
-    user_todos[username].append(todo)
+            stats = self.db.get_user_stats(user_id)
+            return json.dumps({"success": True, "stats": stats})
+        except Exception as e:
+            return json.dumps({"success": False, "message": f"Failed to get stats: {str(e)}"})
 
-    if reminder_minutes:
-        remind_time = datetime.now() + timedelta(minutes=reminder_minutes)
-        threading.Thread(target=_reminder_worker, args=(username, title, remind_time)).start()
+    # Todo methods using database
+    def create_todo(self, session_id: str, title: str, description: str = "", 
+                   due_date: str = None, priority: str = "normal", 
+                   tags: List[str] = None, note_title: str = None) -> str:
+        """Create a new todo"""
+        try:
+            user_id = self._validate_session(session_id)
+            if not user_id:
+                return json.dumps({"success": False, "message": "Not logged in"})
+            
+            if not title.strip():
+                return json.dumps({"success": False, "message": "Title is required"})
+            
+            if priority not in {"low", "normal", "high"}:
+                priority = "normal"  # Default to normal if invalid
+            
+            todo_id = self.db.create_todo(user_id, title.strip(), description.strip() if description else "", 
+                                        due_date, priority, note_title.strip() if note_title else None)
+            
+            if todo_id and tags:
+                # Add tags to the todo
+                clean_tags = [tag.strip() for tag in tags if tag.strip()]
+                if clean_tags:
+                    self.db.add_todo_tags(user_id, todo_id, clean_tags)
+            
+            return json.dumps({"success": True, "id": todo_id, "message": "Todo created"})
+        except Exception as e:
+            return json.dumps({"success": False, "message": f"Failed to create todo: {str(e)}"})
 
-    return json.dumps({"success": True, "id": todo["id"], "message": "Todo created"})
+    def list_todos(self, session_id: str, status: str = None, tag: str = None,
+                  priority: str = None, linked_to_note: str = None) -> str:
+        """List todos for the user"""
+        try:
+            user_id = self._validate_session(session_id)
+            if not user_id:
+                return json.dumps({"success": False, "message": "Not logged in"})
 
-def list_todos(username: str, status: str | None = None, tag: str | None = None,
-               priority: str | None = None, linked_to_note: str | None = None) -> str:
-    _ensure_user_todos(username)
-    items = user_todos[username]
+            todos = self.db.get_user_todos(user_id, status, tag, priority, linked_to_note)
+            
+            # Format response similar to original
+            results = [
+                {
+                    "id": t["id"],
+                    "title": t["title"],
+                    "due_date": t["due_date"],
+                    "priority": t["priority"],
+                    "completed": t["completed"],
+                    "tags": t["tags"],
+                    "note_title": t["note_title"]
+                }
+                for t in todos
+            ]
+            
+            return json.dumps({"success": True, "results": results})
+        except Exception as e:
+            return json.dumps({"success": False, "message": f"Failed to list todos: {str(e)}"})
 
-    results = []
-    for t in items:
-        overdue = False
-        if t["due_date"]:
-            due_dt = datetime.fromisoformat(t["due_date"])
-            if not t["completed"] and datetime.now() > due_dt:
-                overdue = True
-        results.append({
-            "id": t["id"],
-            "title": t["title"],
-            "due_date": t["due_date"],
-            "priority": t["priority"],
-            "completed": t["completed"],
-            "tags": t["tags"],
-            "note_title": t["note_title"],
-            "overdue": overdue
-        })
-    return json.dumps({"success": True, "results": results})
+    def toggle_todo(self, session_id: str, todo_id: int) -> str:
+        """Toggle todo completion status"""
+        try:
+            user_id = self._validate_session(session_id)
+            if not user_id:
+                return json.dumps({"success": False, "message": "Not logged in"})
 
-def get_todo(username: str, todo_id: int) -> str:
-    _ensure_user_todos(username)
-    for t in user_todos[username]:
-        if t["id"] == todo_id:
-            return json.dumps({"success": True, "todo": t})
-    return json.dumps({"success": False, "message": "Todo not found"})
+            if self.db.toggle_todo(user_id, todo_id):
+                return json.dumps({"success": True, "message": "Todo updated"})
+            else:
+                return json.dumps({"success": False, "message": "Todo not found"})
+        except Exception as e:
+            return json.dumps({"success": False, "message": f"Failed to toggle todo: {str(e)}"})
 
-def toggle_todo(username: str, todo_id: int, completed: bool | None = None) -> str:
-    _ensure_user_todos(username)
-    for t in user_todos[username]:
-        if t["id"] == todo_id:
-            t["completed"] = (not t["completed"]) if completed is None else bool(completed)
-            return json.dumps({"success": True, "message": "Todo updated", "completed": t["completed"]})
-    return json.dumps({"success": False, "message": "Todo not found"})
+    def delete_todo(self, session_id: str, todo_id: int) -> str:
+        """Delete a todo"""
+        try:
+            user_id = self._validate_session(session_id)
+            if not user_id:
+                return json.dumps({"success": False, "message": "Not logged in"})
 
-def delete_todo(username: str, todo_id: int) -> str:
-    _ensure_user_todos(username)
-    for i, t in enumerate(user_todos[username]):
-        if t["id"] == todo_id:
-            del user_todos[username][i]
-            return json.dumps({"success": True, "message": "Todo deleted"})
-    return json.dumps({"success": False, "message": "Todo not found"})
+            if self.db.delete_todo(user_id, todo_id):
+                return json.dumps({"success": True, "message": "Todo deleted"})
+            else:
+                return json.dumps({"success": False, "message": "Todo not found"})
+        except Exception as e:
+            return json.dumps({"success": False, "message": f"Failed to delete todo: {str(e)}"})
 
 
-def main():
+def run_cli():
+    """CLI interface for the database-powered note system - call this function to start CLI"""
     system = NoteDatabaseSystem()
     current_session = None
 
     print("=== Note Taking System (Database Edition) ===")
 
     while True:
-        if not current_session:
-            print("\n1. Register")
-            print("2. Login")
-            print("3. Exit")
-            choice = input("Choose option: ")
+        try:
+            if not current_session:
+                print("\n1. Register")
+                print("2. Login")
+                print("3. Exit")
+                choice = input("Choose option: ").strip()
 
-            if choice == "1":
-                username = input("Username: ")
-                password = input("Password: ")
-                result = json.loads(system.register_user(username, password))
-                print(result["message"])
-
-            elif choice == "2":
-                username = input("Username: ")
-                password = input("Password: ")
-                result = json.loads(system.login_user(username, password))
-                print(result["message"])
-                if result["success"]:
-                    current_session = result["session_id"]
-
-            elif choice == "3":
-                break
-
-        else:
-            print(f"\n=== Notes Menu ===")
-            print("1. Create Note")
-            print("2. List Notes")
-            print("3. View Note")
-            print("4. Edit Note")
-            print("5. Delete Note")
-            print("6. Search Notes")
-            print("7. Add Tags")
-            print("8. View Stats")
-            print("9. Todo List")
-            print("10. Logout")
-
-            choice = input("Choose option: ")
-
-            if choice == "9":
-                while True:
-                    print(f"\n=== Todos Menu ({username}) ===")
-                    print("1. Create Todo")
-                    print("2. List Todos")
-                    print("3. Toggle Todo Completion")
-                    print("4. Delete Todo")
-                    print("5. Back to Main Menu")
-
-                    choice3 = input("Choose option: ")
-
-                    if choice3 == "1":
-                        title = input("Todo title: ")
-                        desc = input("Description: ")
-                        due = input("Due date (YYYY-MM-DD HH:MM or blank): ") or None
-                        prio = input("Priority (low/normal/high): ") or "normal"
-                        tags_input = input("Tags (comma-separated): ")
-                        tags = [tag.strip() for tag in tags_input.split(",") if tag.strip()]
-                        reminder = input("Reminder in minutes (blank for none): ")
-                        reminder_minutes = int(reminder) if reminder.strip() else None
-                        result = json.loads(create_todo(username, title, desc, due, prio, tags, reminder_minutes=reminder_minutes))
+                if choice == "1":
+                    username = input("Username: ").strip()
+                    password = input("Password: ").strip()
+                    if username and password:
+                        result = json.loads(system.register_user(username, password))
                         print(result["message"])
-
-                    elif choice3 == "2":
-                        result = json.loads(list_todos(username))
-                        print(f"\n=== Todos ({len(result['results'])}) ===")
-                        for todo in result["results"]:
-                            status = "X" if todo["completed"] else " "
-                            overdue_mark = " (OVERDUE!)" if todo["overdue"] else ""
-                            print(f"[{status}] {todo['id']}. {todo['title']} "
-                                  f"(Priority: {todo['priority']}, Due: {todo['due_date']}){overdue_mark}")
-
-                    elif choice3 == "3":
-                        todo_id = int(input("Todo ID to toggle: "))
-                        result = json.loads(toggle_todo(username, todo_id))
-                        print(result["message"])
-
-                    elif choice3 == "4":
-                        todo_id = int(input("Todo ID to delete: "))
-                        result = json.loads(delete_todo(username, todo_id))
-                        print(result["message"])
-
-                    elif choice3 == "5":
-                        break
                     else:
-                        print("Invalid choice")
+                        print("Username and password cannot be empty")
 
-            elif choice == "10":
-                system.logout_user(current_session)
-                current_session = None
-                print("Logged out successfully")
+                elif choice == "2":
+                    username = input("Username: ").strip()
+                    password = input("Password: ").strip()
+                    if username and password:
+                        result = json.loads(system.login_user(username, password))
+                        print(result["message"])
+                        if result["success"]:
+                            current_session = result["session_id"]
+                    else:
+                        print("Username and password cannot be empty")
+
+                elif choice == "3":
+                    print("Goodbye!")
+                    break
+
+                else:
+                    print("Invalid choice")
+
+            else:
+                username = system._get_username_from_session(current_session)
+                print(f"\n=== Notes Menu ({username}) ===")
+                print("1. Create Note")
+                print("2. List Notes")
+                print("3. View Note")
+                print("4. Edit Note")
+                print("5. Delete Note")
+                print("6. Search Notes")
+                print("7. Add Tags")
+                print("8. View Stats")
+                print("9. Todo List")
+                print("10. Logout")
+               
+                choice = input("Choose option: ").strip()
+
+                if choice == "1":
+                    title = input("Note title: ").strip()
+                    if not title:
+                        print("Title cannot be empty")
+                        continue
+                    print("Enter content (type 'END' on a new line to finish):")
+                    content_lines = []
+                    while True:
+                        line = input()
+                        if line == "END":
+                            break
+                        content_lines.append(line)
+                    content = "\n".join(content_lines)
+                    result = json.loads(system.create_note(current_session, title, content))
+                    print(result["message"])
+
+                elif choice == "2":
+                    result = json.loads(system.list_notes(current_session))
+                    if result["success"]:
+                        print(f"\n=== Your Notes ({result['count']}) ===")
+                        if result["notes"]:
+                            for note in result["notes"]:
+                                tags_str = ", ".join(note["tags"]) if note["tags"] else "No tags"
+                                print(f"• {note['title']} (Modified: {note['modified_at']})")
+                                print(f"  Tags: {tags_str}")
+                                print(f"  {note['preview']}\n")
+                        else:
+                            print("No notes found")
+                    else:
+                        print(result["message"])
+
+                elif choice == "3":
+                    title = input("Note title to view: ").strip()
+                    if not title:
+                        print("Title cannot be empty")
+                        continue
+                    result = json.loads(system.get_note(current_session, title))
+                    if result["success"]:
+                        note = result["note"]
+                        print(f"\n=== {note['title']} ===")
+                        print(f"Created: {note['created_at']}")
+                        print(f"Modified: {note['modified_at']}")
+                        if note["tags"]:
+                            print(f"Tags: {', '.join(note['tags'])}")
+                        print(f"\n{note['content']}\n")
+                    else:
+                        print(result["message"])
+
+                elif choice == "4":
+                    title = input("Note title to edit: ").strip()
+                    if not title:
+                        print("Title cannot be empty")
+                        continue
+                    print("Enter new content (type 'END' on a new line to finish):")
+                    content_lines = []
+                    while True:
+                        line = input()
+                        if line == "END":
+                            break
+                        content_lines.append(line)
+                    new_content = "\n".join(content_lines)
+                    result = json.loads(system.edit_note(current_session, title, new_content))
+                    print(result["message"])
+
+                elif choice == "5":
+                    title = input("Note title to delete: ").strip()
+                    if not title:
+                        print("Title cannot be empty")
+                        continue
+                    confirm = input(f"Are you sure you want to delete '{title}'? (y/N): ")
+                    if confirm.lower() == 'y':
+                        result = json.loads(system.delete_note(current_session, title))
+                        print(result["message"])
+                    else:
+                        print("Deletion cancelled")
+
+                elif choice == "6":
+                    query = input("Search query: ").strip()
+                    if not query:
+                        print("Search query cannot be empty")
+                        continue
+                    result = json.loads(system.search_notes(current_session, query))
+                    if result["success"] and result["results"]:
+                        print(f"\n=== Search Results ({result['count']}) ===")
+                        for note in result["results"]:
+                            print(f"• {note['title']} (Modified: {note['modified_at']})")
+                            print(f"  {note['preview']}\n")
+                    else:
+                        print("No results found")
+
+                elif choice == "7":
+                    title = input("Note title to add tags to: ").strip()
+                    if not title:
+                        print("Title cannot be empty")
+                        continue
+                    tags_input = input("Tags (comma-separated): ").strip()
+                    if not tags_input:
+                        print("Tags cannot be empty")
+                        continue
+                    tags = [tag.strip() for tag in tags_input.split(",") if tag.strip()]
+                    if not tags:
+                        print("No valid tags provided")
+                        continue
+                    result = json.loads(system.add_tags(current_session, title, tags))
+                    if result["success"]:
+                        print(f"All tags: {', '.join(result['tags'])}")
+                    else:
+                        print(result["message"])
+
+                elif choice == "8":
+                    result = json.loads(system.get_stats(current_session))
+                    if result["success"]:
+                        stats = result["stats"]
+                        print(f"\n=== Your Statistics ===")
+                        print(f"Total Notes: {stats['total_notes']}")
+                        print(f"Unique Tags: {stats['total_tags']}")
+                        print(f"Total Todos: {stats['total_todos']}")
+                        if stats["recent_note"]["title"]:
+                            print(f"Most Recent: {stats['recent_note']['title']}")
+                            print(f"Last Modified: {stats['recent_note']['modified_at']}")
+                    else:
+                        print(result["message"])
+
+                elif choice == "9":
+                    while True:
+                        print(f"\n=== Todos Menu ({username}) ===")
+                        print("1. Create Todo")
+                        print("2. List Todos")
+                        print("3. Toggle Todo Completion")
+                        print("4. Delete Todo")
+                        print("5. Back to Main Menu")
+
+                        todo_choice = input("Choose option: ").strip()
+
+                        if todo_choice == "1":
+                            title = input("Todo title: ").strip()
+                            if not title:
+                                print("Title cannot be empty")
+                                continue
+                            desc = input("Description: ").strip()
+                            due = input("Due date (YYYY-MM-DD or blank): ").strip() or None
+                            prio = input("Priority (low/normal/high): ").strip() or "normal"
+                            if prio not in {"low", "normal", "high"}:
+                                print("Invalid priority, using 'normal'")
+                                prio = "normal"
+                            tags_input = input("Tags (comma-separated): ").strip()
+                            tags = [tag.strip() for tag in tags_input.split(",") if tag.strip()] if tags_input else None
+                            note_title = input("Link to note title (or blank): ").strip() or None
+                            result = json.loads(system.create_todo(current_session, title, desc, due, prio, tags, note_title))
+                            print(result["message"])
+
+                        elif todo_choice == "2":
+                            result = json.loads(system.list_todos(current_session))
+                            if result["success"]:
+                                print(f"\n=== Todos ({len(result['results'])}) ===")
+                                if result["results"]:
+                                    for todo in result["results"]:
+                                        status = "✓" if todo["completed"] else " "
+                                        note_info = f" -> {todo['note_title']}" if todo['note_title'] else ""
+                                        tags_info = f" [{', '.join(todo['tags'])}]" if todo['tags'] else ""
+                                        print(f"[{status}] {todo['id']}. {todo['title']}{note_info}{tags_info}")
+                                        print(f"    Priority: {todo['priority']}, Due: {todo['due_date'] or 'No due date'}")
+                                else:
+                                    print("No todos found")
+                            else:
+                                print(result["message"])
+
+                        elif todo_choice == "3":
+                            try:
+                                todo_id = int(input("Todo ID to toggle: ").strip())
+                                result = json.loads(system.toggle_todo(current_session, todo_id))
+                                print(result["message"])
+                            except ValueError:
+                                print("Invalid todo ID")
+
+                        elif todo_choice == "4":
+                            try:
+                                todo_id = int(input("Todo ID to delete: ").strip())
+                                confirm = input(f"Are you sure you want to delete todo {todo_id}? (y/N): ")
+                                if confirm.lower() == 'y':
+                                    result = json.loads(system.delete_todo(current_session, todo_id))
+                                    print(result["message"])
+                                else:
+                                    print("Deletion cancelled")
+                            except ValueError:
+                                print("Invalid todo ID")
+
+                        elif todo_choice == "5":
+                            break
+                        else:
+                            print("Invalid choice")
+
+                elif choice == "10":
+                    system.logout_user(current_session)
+                    current_session = None
+                    print("Logged out successfully")
+
+                else:
+                    print("Invalid choice")
+                    
+        except KeyboardInterrupt:
+            print("\nGoodbye!")
+            break
+        except Exception as e:
+            print(f"An error occurred: {e}")
 
 
+# Example usage and main entry point
 if __name__ == "__main__":
-    main()
+    # The CLI will only run when this file is executed directly
+    run_cli()

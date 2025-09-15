@@ -1,5 +1,6 @@
+#database_pim_final.py
 import sqlite3
-import hashlib
+import bcrypt
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Tuple
 
@@ -57,17 +58,51 @@ class NoteDatabase:
             )
         ''')
         
+        # Todos table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS todos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT DEFAULT '',
+                due_date TEXT,
+                priority TEXT DEFAULT 'normal',
+                completed BOOLEAN DEFAULT FALSE,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                note_id INTEGER,
+                FOREIGN KEY (user_id) REFERENCES users (id),
+                FOREIGN KEY (note_id) REFERENCES notes (id)
+            )
+        ''')
+        
+        # Todo-Tags junction table
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS todo_tags (
+                todo_id INTEGER,
+                tag_id INTEGER,
+                PRIMARY KEY (todo_id, tag_id),
+                FOREIGN KEY (todo_id) REFERENCES todos (id) ON DELETE CASCADE,
+                FOREIGN KEY (tag_id) REFERENCES tags (id) ON DELETE CASCADE
+            )
+        ''')
+        
         # Create indexes for better performance
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_notes_user_id ON notes(user_id)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_notes_title ON notes(title)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_note_tags_note_id ON note_tags(note_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_todos_user_id ON todos(user_id)')
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_todo_tags_todo_id ON todo_tags(todo_id)')
         
         conn.commit()
         conn.close()
     
     def _hash_password(self, password: str) -> str:
-        """Hash password using SHA-256"""
-        return hashlib.sha256(password.encode()).hexdigest()
+        """Hash password using bcrypt with salt"""
+        return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    
+    def _verify_password(self, password: str, hash: str) -> bool:
+        """Verify password against bcrypt hash"""
+        return bcrypt.checkpw(password.encode('utf-8'), hash.encode('utf-8'))
     
     def create_user(self, username: str, password: str) -> bool:
         """Create a new user. Returns True if successful, False if username exists"""
@@ -85,22 +120,25 @@ class NoteDatabase:
             return True
             
         except sqlite3.IntegrityError:
+            conn.close()
             return False
     
     def verify_user(self, username: str, password: str) -> bool:
-        """Verify user credentials"""
+        """Verify user credentials using bcrypt"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
-        password_hash = self._hash_password(password)
         cursor.execute(
-            'SELECT id FROM users WHERE username = ? AND password_hash = ?',
-            (username, password_hash)
+            'SELECT password_hash FROM users WHERE username = ?',
+            (username,)
         )
         result = cursor.fetchone()
         conn.close()
         
-        return result is not None
+        if not result:
+            return False
+        
+        return self._verify_password(password, result[0])
     
     def get_user_id(self, username: str) -> Optional[int]:
         """Get user ID by username"""
@@ -127,6 +165,7 @@ class NoteDatabase:
             return note_id
             
         except sqlite3.IntegrityError:
+            conn.close()
             return None
     
     def get_note_by_title(self, user_id: int, title: str) -> Optional[Dict[str, Any]]:
@@ -331,13 +370,190 @@ class NoteDatabase:
         ''', (user_id,))
         recent_note = cursor.fetchone()
         
+        # Count todos
+        cursor.execute('SELECT COUNT(*) FROM todos WHERE user_id = ?', (user_id,))
+        todo_count = cursor.fetchone()[0]
+        
         conn.close()
         
         return {
             "total_notes": note_count,
             "total_tags": tag_count,
+            "total_todos": todo_count,
             "recent_note": {
                 "title": recent_note[0] if recent_note else None,
                 "modified_at": recent_note[1] if recent_note else None
             }
         }
+    
+    # Todo database methods
+    def create_todo(self, user_id: int, title: str, description: str = "", 
+                   due_date: str = None, priority: str = "normal", 
+                   note_title: str = None) -> Optional[int]:
+        """Create a new todo. Returns todo_id if successful"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        note_id = None
+        if note_title:
+            # Get note_id if linking to a note
+            cursor.execute('SELECT id FROM notes WHERE user_id = ? AND title = ?', 
+                         (user_id, note_title))
+            note_result = cursor.fetchone()
+            if note_result:
+                note_id = note_result[0]
+        
+        cursor.execute('''
+            INSERT INTO todos (user_id, title, description, due_date, priority, note_id)
+            VALUES (?, ?, ?, ?, ?, ?)
+        ''', (user_id, title, description, due_date, priority, note_id))
+        
+        todo_id = cursor.lastrowid
+        conn.commit()
+        conn.close()
+        return todo_id
+    
+    def get_user_todos(self, user_id: int, status: str = None, tag: str = None,
+                      priority: str = None, linked_to_note: str = None) -> List[Dict[str, Any]]:
+        """Get todos for a user with optional filters"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Build query with filters
+        query = '''
+            SELECT t.id, t.title, t.description, t.due_date, t.priority, 
+                   t.completed, t.created_at, n.title as note_title
+            FROM todos t
+            LEFT JOIN notes n ON t.note_id = n.id
+            WHERE t.user_id = ?
+        '''
+        params = [user_id]
+        
+        if status == "open":
+            query += " AND t.completed = 0"
+        elif status == "done":
+            query += " AND t.completed = 1"
+            
+        if priority:
+            query += " AND t.priority = ?"
+            params.append(priority)
+            
+        if linked_to_note:
+            query += " AND n.title = ?"
+            params.append(linked_to_note)
+        
+        query += " ORDER BY t.created_at DESC"
+        
+        cursor.execute(query, params)
+        todos = []
+        
+        for row in cursor.fetchall():
+            todo_id = row[0]
+            
+            # Get tags for this todo
+            cursor.execute('''
+                SELECT t.name
+                FROM tags t
+                JOIN todo_tags tt ON t.id = tt.tag_id
+                WHERE tt.todo_id = ?
+            ''', (todo_id,))
+            
+            todo_tags = [tag_row[0] for tag_row in cursor.fetchall()]
+            
+            # Apply tag filter if specified
+            if tag and tag not in todo_tags:
+                continue
+            
+            todos.append({
+                "id": todo_id,
+                "title": row[1],
+                "description": row[2],
+                "due_date": row[3],
+                "priority": row[4],
+                "completed": bool(row[5]),
+                "created_at": row[6],
+                "note_title": row[7],
+                "tags": todo_tags
+            })
+        
+        conn.close()
+        return todos
+    
+    def toggle_todo(self, user_id: int, todo_id: int) -> bool:
+        """Toggle todo completion status. Returns True if successful"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # First get current status
+        cursor.execute('SELECT completed FROM todos WHERE id = ? AND user_id = ?', 
+                      (todo_id, user_id))
+        result = cursor.fetchone()
+        
+        if not result:
+            conn.close()
+            return False
+        
+        new_status = not bool(result[0])
+        
+        cursor.execute('UPDATE todos SET completed = ? WHERE id = ? AND user_id = ?',
+                      (new_status, todo_id, user_id))
+        
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return success
+    
+    def delete_todo(self, user_id: int, todo_id: int) -> bool:
+        """Delete a todo. Returns True if successful"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('DELETE FROM todos WHERE id = ? AND user_id = ?', 
+                      (todo_id, user_id))
+        success = cursor.rowcount > 0
+        conn.commit()
+        conn.close()
+        return success
+    
+    def add_todo_tags(self, user_id: int, todo_id: int, tags: List[str]) -> Optional[List[str]]:
+        """Add tags to a todo. Returns all tags if successful"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Verify todo belongs to user
+        cursor.execute('SELECT id FROM todos WHERE id = ? AND user_id = ?', 
+                      (todo_id, user_id))
+        if not cursor.fetchone():
+            conn.close()
+            return None
+        
+        try:
+            for tag_name in tags:
+                # Insert tag if it doesn't exist
+                cursor.execute('INSERT OR IGNORE INTO tags (name) VALUES (?)', (tag_name,))
+                
+                # Get tag ID
+                cursor.execute('SELECT id FROM tags WHERE name = ?', (tag_name,))
+                tag_id = cursor.fetchone()[0]
+                
+                # Link todo and tag
+                cursor.execute('INSERT OR IGNORE INTO todo_tags (todo_id, tag_id) VALUES (?, ?)', 
+                             (todo_id, tag_id))
+            
+            # Get all tags for this todo
+            cursor.execute('''
+                SELECT t.name
+                FROM tags t
+                JOIN todo_tags tt ON t.id = tt.tag_id
+                WHERE tt.todo_id = ?
+            ''', (todo_id,))
+            
+            all_tags = [row[0] for row in cursor.fetchall()]
+            
+            conn.commit()
+            conn.close()
+            return all_tags
+            
+        except Exception:
+            conn.close()
+            return None
