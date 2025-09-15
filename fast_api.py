@@ -8,7 +8,7 @@ from datetime import datetime
 from database import NoteDatabase
 
 # Import your existing system class
-from main_pim_final import NoteDatabaseSystem
+from main import NoteDatabaseSystem
 
 app = FastAPI(title="Notes & Todos API", version="1.0.0")
 
