@@ -544,25 +544,6 @@ async def delete_todo_item(todo_id: int, username: str = Depends(get_current_use
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to delete todo: {str(e)}")
 
-# Root endpoint with API info
-@app.get("/")
-async def root():
-    """API information"""
-    return create_response(
-        success=True,
-        data={
-            "version": "1.0.0",
-            "endpoints": {
-                "auth": ["/register", "/login", "/logout"],
-                "notes": ["/notes", "/notes/{title}", "/notes/search/{query}"],
-                "todos": ["/todos", "/todos/{todo_id}"],
-                "other": ["/stats", "/health", "/test"]
-            },
-            "docs": "/docs"
-        },
-        message="Welcome to Notes & Todos API"
-    )
-
 @app.get("/")
 async def root():
     return RedirectResponse(url="/frontend/loading.html")
