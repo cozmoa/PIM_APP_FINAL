@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Login • PIM</title>
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --card-bg: #111;
+      --text: #f5f5f5;
+      --muted: #bdbdbd;
+      --accent: #ffffff;
+      --input-bg: #171717;
+      --input-border: #3a3a3a;
+      --input-border-focus: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      margin: 0;
+      color: var(--text);
+      background: var(--bg);
+      font: 16px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    }
+    .wrap {
+      min-height: 100%;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .card {
+      width: 100%;
+      max-width: 420px;
+      padding: 28px 24px;
+      background: var(--card-bg);
+      border: 1px solid rgba(255,255,255,0.35);            /* white outline */
+      box-shadow:
+        0 0 0 1px rgba(255,255,255,0.12) inset,            /* inner hairline */
+        0 10px 30px rgba(255,255,255,0.06),                /* soft white glow */
+        0 8px 24px rgba(0,0,0,0.6);                        /* depth */
+      border-radius: 16px;
+    }
+    h1 {
+      font-size: 20px;
+      margin: 0 0 18px;
+      letter-spacing: 0.2px;
+    }
+    .field { margin-bottom: 14px; }
+    .label {
+      display: block;
+      font-size: 13px;
+      color: var(--muted);
+      margin: 0 0 6px;
+    }
+    input {
+      width: 100%;
+      padding: 12px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--input-border);
+      background: var(--input-bg);
+      color: var(--text);
+      outline: none;
+      transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    input:focus {
+      border-color: var(--input-border-focus);
+      box-shadow: 0 0 0 3px rgba(255,255,255,0.15);
+    }
+    .actions {
+      margin-top: 10px;
+    }
+    button {
+      width: 100%;
+      padding: 12px 14px;
+      font-weight: 600;
+      border: 1px solid rgba(255,255,255,0.6);
+      color: var(--bg);
+      background: var(--accent);
+      border-radius: 10px;
+      cursor: pointer;
+      transition: transform .06s ease, box-shadow .15s ease;
+    }
+    button:hover { box-shadow: 0 8px 20px rgba(255,255,255,0.12); }
+    button:active { transform: translateY(1px); }
+    .error {
+      margin: 10px 0 0;
+      color: #ffb3b3;
+      font-size: 13px;
+      min-height: 18px;
+    }
+    .subtle {
+      text-align: center;
+      margin-top: 14px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+    .subtle a {
+      color: #fff;
+      text-underline-offset: 3px;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <form class="card" id="loginForm" autocomplete="on">
+      <h1>Sign in</h1>
+
+      <div class="field">
+        <label class="label" for="username">Username</label>
+        <input id="username" name="username" type="text" required placeholder="Enter your username" />
+      </div>
+
+      <div class="field">
+        <label class="label" for="password">Password</label>
+        <input id="password" name="password" type="password" required placeholder="••••••••" />
+      </div>
+
+      <div class="actions">
+        <button type="submit">Log in</button>
+      </div>
+
+      <div class="error" id="errorMsg"></div>
+
+      <p class="subtle">
+        Don’t have an account?
+        <a href="register.html">Register</a>
+      </p>
+    </form>
+  </div>
+
+  <script>
+    // adjust if you run your own local backend:
+    const API_BASE = 'https://pim-app-final.onrender.com';
+
+    const form = document.getElementById('loginForm');
+    const errorMsg = document.getElementById('errorMsg');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorMsg.textContent = '';
+
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!username || !password) {
+        errorMsg.textContent = 'Please enter both username and password.';
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/login`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          throw new Error(data?.detail || data?.message || 'Login failed');
+        }
+
+        // backend returns { success, data: { session_id, username }, message }
+        const sessionId = data?.data?.session_id;
+        if (!sessionId) throw new Error('No session returned from server');
+
+        localStorage.setItem('sessionId', sessionId);
+        localStorage.setItem('username', username);
+
+        // go to your notes page after login (create this next)
+        window.location.href = 'notes.html';
+      } catch (err) {
+        errorMsg.textContent = err.message || 'Something went wrong. Try again.';
+      }
+    });
+  </script>
+</body>
+</html>
