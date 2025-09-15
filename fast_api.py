@@ -5,7 +5,7 @@ from pydantic import BaseModel, field_validator
 from typing import Optional, List
 import json
 from datetime import datetime
-from database_pim_final import NoteDatabase
+from database import NoteDatabase
 
 # Import your existing system class
 from main_pim_final import NoteDatabaseSystem

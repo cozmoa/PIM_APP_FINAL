@@ -2,7 +2,7 @@
 import json
 import uuid
 from typing import Optional, List, Dict, Any
-from database_pim_final import NoteDatabase
+from database import NoteDatabase
 
 class NoteDatabaseSystem:
     def __init__(self, db_path: str = "notes.db"):
