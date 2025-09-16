@@ -34,11 +34,11 @@
       max-width: 420px;
       padding: 28px 24px;
       background: var(--card-bg);
-      border: 1px solid rgba(255,255,255,0.35);            /* white outline */
+      border: 1px solid rgba(255,255,255,0.35);            
       box-shadow:
-        0 0 0 1px rgba(255,255,255,0.12) inset,            /* inner hairline */
-        0 10px 30px rgba(255,255,255,0.06),                /* soft white glow */
-        0 8px 24px rgba(0,0,0,0.6);                        /* depth */
+        0 0 0 1px rgba(255,255,255,0.12) inset,            
+        0 10px 30px rgba(255,255,255,0.06),                
+        0 8px 24px rgba(0,0,0,0.6);                        
       border-radius: 16px;
     }
     h1 {
@@ -169,7 +169,7 @@
         localStorage.setItem('username', username);
 
         // redirect after successful login
-        window.location.href = 'notes.html';
+        window.location.href = 'dashboard.html';
       } catch (err) {
         errorMsg.textContent = err.message || 'Something went wrong. Try again.';
       }
