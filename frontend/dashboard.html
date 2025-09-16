@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Dashboard • PIM</title>
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --card-bg: #111;
+      --sidebar-bg: #151515;
+      --text: #f5f5f5;
+      --muted: #bdbdbd;
+      --accent: #ffffff;
+      --input-bg: #171717;
+      --input-border: #3a3a3a;
+      --input-border-focus: #ffffff;
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      height: 100%;
+      margin: 0;
+      color: var(--text);
+      background: var(--bg);
+      font: 15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      display: flex;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: 220px;
+      background: var(--sidebar-bg);
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid rgba(255,255,255,0.1);
+    }
+    .sidebar h2 {
+      margin: 0 0 20px;
+      font-size: 18px;
+    }
+    .sidebar a {
+      color: var(--text);
+      text-decoration: none;
+      padding: 10px 0;
+      display: block;
+      transition: color .2s;
+    }
+    .sidebar a:hover {
+      color: var(--accent);
+    }
+
+    /* Main content */
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top bar */
+    .topbar {
+      padding: 12px 20px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #0d0d0d;
+    }
+    .topbar input {
+      width: 300px;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid var(--input-border);
+      background: var(--input-bg);
+      color: var(--text);
+      outline: none;
+    }
+    .topbar input:focus {
+      border-color: var(--input-border-focus);
+      box-shadow: 0 0 0 2px rgba(255,255,255,0.2);
+    }
+
+    /* Widgets grid */
+    .widgets {
+      padding: 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 20px;
+    }
+    .widget {
+      background: var(--card-bg);
+      padding: 20px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.2);
+      box-shadow: 0 6px 20px rgba(0,0,0,0.6);
+    }
+    .widget h3 {
+      margin-top: 0;
+      font-size: 16px;
+      margin-bottom: 12px;
+    }
+    .widget button {
+      width: 100%;
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.4);
+      background: var(--accent);
+      color: var(--bg);
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .widget button:hover {
+      background: #e5e5e5;
+    }
+  </style>
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <h2>PIM</h2>
+    <a href="dashboard.html">Dashboard</a>
+    <a href="notes.html">Notes</a>
+    <a href="todos.html">Todos</a>
+    <a href="reminders.html">Reminders</a>
+    <a href="login.html" onclick="localStorage.clear()">Logout</a>
+  </aside>
+
+  <!-- Main content -->
+  <div class="main">
+    <!-- Top bar -->
+    <div class="topbar">
+      <h2>Dashboard</h2>
+      <input type="text" id="searchBox" placeholder="Search notes, todos, reminders..." />
+    </div>
+
+    <!-- Widgets -->
+    <div class="widgets">
+      <div class="widget">
+        <h3>Create Note</h3>
+        <button onclick="window.location.href='notes.html'">Go</button>
+      </div>
+
+      <div class="widget">
+        <h3>Create Folder</h3>
+        <button onclick="alert('Folder creation coming soon!')">Go</button>
+      </div>
+
+      <div class="widget">
+        <h3>Todo List</h3>
+        <button onclick="window.location.href='todos.html'">Go</button>
+      </div>
+
+      <div class="widget">
+        <h3>Reminders</h3>
+        <button onclick="window.location.href='reminders.html'">Go</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Simple search redirect (expand later to API integration)
+    document.getElementById('searchBox').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        const q = e.target.value.trim();
+        if (q) {
+          window.location.href = `notes.html?search=${encodeURIComponent(q)}`;
+        }
+      }
+    });
+  </script>
+</body>
+</html>
