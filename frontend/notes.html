@@ -1,218 +1,207 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Notes • PIM</title>
   <style>
-    :root{
-      --bg:#0a0a0a; --ink:#f5f5f5; --muted:#bdbdbd; --card:#111; --field:#1f1f1f; --border:#333; --accent:#fff; --accent-ink:#000;
-      --green:#9affc6;
-    }
+    :root{--bg:#0a0a0a;--panel:#111;--card:#151515;--ink:#f5f5f5;--muted:#bdbdbd;--border:#2a2a2a;--accent:#fff}
     *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-    .layout{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
-    .sidebar{background:#111;padding:16px;border-right:1px solid rgba(255,255,255,.1)}
-    .sidebar h2{margin:6px 0 10px;font-size:16px}
-    .tree{list-style:none;margin:0;padding:0}
-    .tree li{padding:6px 8px;border-radius:8px;margin:4px 0;background:#1a1a1a;cursor:pointer}
-    .tree li:hover{background:#222}
-    .drop-target{outline:2px dashed #3a3a3a}
-    .rootDrop{margin-top:10px;padding:8px;border:1px dashed #3a3a3a;border-radius:8px;color:#bdbdbd;text-align:center}
-    .content{padding:18px}
-    .topbar{display:flex;gap:10px;align-items:center;margin-bottom:12px}
-    .back{color:var(--muted);text-decoration:none;padding:6px 10px;border:1px solid var(--border);border-radius:8px}
-    .search{margin-left:auto;width:280px;background:var(--field);border:1px solid var(--border);color:var(--ink);padding:8px 10px;border-radius:8px}
-    .list{display:grid;gap:10px}
-    .note{
-      background:var(--card);border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:12px;cursor:grab;
-      display:flex;justify-content:space-between;align-items:center
-    }
-    .note:hover{background:#161616}
-    .badge{font-size:12px;color:#bdbdbd;background:#1f1f1f;border:1px solid #333;padding:4px 6px;border-radius:999px;margin-left:8px}
-    .actions{display:flex;gap:8px}
-    .btn{padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.5);background:var(--accent);color:var(--accent-ink);font-weight:700;cursor:pointer}
-    .subtle{font-size:12px;color:var(--muted);margin-top:6px}
-    .status{height:18px;margin-top:6px}
-    .ok{color:var(--green)} .err{color:#ffb3b3}
+    body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;display:flex;height:100vh}
+    .sidebar{width:280px;background:var(--panel);padding:16px;border-right:1px solid var(--border);display:flex;flex-direction:column}
+    .side-top{display:flex;justify-content:space-between;align-items:center}
+    .add-folder{padding:8px 10px;background:var(--accent);border:1px solid rgba(255,255,255,.35);border-radius:8px;color:#000;font-weight:700;cursor:pointer}
+    .tree{margin-top:10px}
+    .node{background:#1e1e1e;border:1px solid var(--border);padding:8px 10px;border-radius:8px;margin-bottom:8px;cursor:default}
+    .node-header{display:flex;align-items:center;gap:6px;user-select:none}
+    .toggle{width:16px;height:16px;border:1px solid var(--border);border-radius:4px;display:grid;place-items:center;font-size:11px;color:var(--muted);cursor:pointer}
+    .children{margin-left:18px;border-left:1px dashed var(--border);padding-left:12px;margin-top:6px}
+    .main{flex:1;padding:18px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+    .back{color:var(--muted);text-decoration:none;border:1px solid var(--border);padding:6px 10px;border-radius:8px}
+    .search{padding:9px 12px;border-radius:10px;border:1px solid var(--border);background:#141414;color:var(--ink);width:300px}
+    .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:12px}
+    .card{background:var(--card);border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
+    .title{font-weight:700}
+    .meta{font-size:12px;color:var(--muted)}
+    .actions{display:flex;gap:8px;margin-top:6px}
+    .btn{padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:#1b1b1b;color:var(--ink);cursor:pointer}
+    .btn:hover{background:#222}
+    .danger{border-color:#733}
+    .select{padding:6px 8px;border-radius:8px;background:#111;border:1px solid var(--border);color:var(--ink)}
+    .empty{color:var(--muted);margin-top:20px}
   </style>
 </head>
 <body>
-  <div class="layout">
-    <aside class="sidebar">
-      <h2>Folders</h2>
-      <ul id="folderTree" class="tree"></ul>
-      <div id="rootDrop" class="rootDrop" ondragover="event.preventDefault()">Drop here to unfile</div>
-    </aside>
+  <aside class="sidebar">
+    <div class="side-top">
+      <h3>Folders</h3>
+      <button class="add-folder" id="newFolder">+ New</button>
+    </div>
+    <div id="folderTree" class="tree"></div>
+  </aside>
 
-    <main class="content">
-      <div class="topbar">
-        <a class="back" href="dashboard.html">← Back</a>
-        <button class="btn" onclick="location.href='create_note.html'">+ New Note</button>
-        <input id="searchBox" class="search" placeholder="Search notes…" />
-      </div>
+  <main class="main">
+    <div class="topbar">
+      <a class="back" href="dashboard.html">← Back</a>
+      <input id="search" class="search" placeholder="Search notes…"/>
+    </div>
 
-      <div id="list" class="list"></div>
-      <div id="status" class="status"></div>
-      <div class="subtle">Tip: drag a note onto a folder on the left to file it.</div>
-    </main>
-  </div>
+    <div id="cards" class="cards"></div>
+    <p id="emptyState" class="empty" style="display:none">No notes yet. Try creating one on the dashboard.</p>
+  </main>
 
   <script>
-    // ---------- API & auth ----------
-    const API_BASE = location.hostname.includes("localhost")
-      ? "http://127.0.0.1:8000"
-      : "https://pim-app-final.onrender.com";
-    const sessionId = localStorage.getItem("sessionId");
+    // ----- API -----
+    const API_BASE = location.hostname.includes("localhost") ? "http://127.0.0.1:8000" : "https://pim-app-final.onrender.com";
     const username = localStorage.getItem("username") || "guest";
+    const sessionId = localStorage.getItem("sessionId");
     if (!sessionId) location.href = "login.html";
 
-    // ---------- storage keys ----------
     const FOLDERS_KEY = `${username}_foldersTree`;
-    const LEGACY_FLAT_KEY = `${username}_folders`;
     const NOTE_FOLDER_KEY = `${username}_noteFolders`; // { [title]: folderId }
 
-    // ---------- folder helpers ----------
-    function uid(){ return Math.random().toString(36).slice(2)+Date.now().toString(36); }
-    function ensureIds(tree){ tree.forEach(n=>{ if(!n.id) n.id=uid(); if(!Array.isArray(n.children)) n.children=[]; ensureIds(n.children);}); return tree; }
-    function loadFoldersTree(){
-      const m = localStorage.getItem(FOLDERS_KEY);
-      if (m) return JSON.parse(m);
-      const legacy = localStorage.getItem(LEGACY_FLAT_KEY);
-      if (legacy){
-        const arr = JSON.parse(legacy).map(name => ({ id: uid(), name, children: [] }));
-        localStorage.setItem(FOLDERS_KEY, JSON.stringify(arr));
-        return arr;
-      }
-      return [];
-    }
-    function saveFoldersTree(tree){ localStorage.setItem(FOLDERS_KEY, JSON.stringify(tree)); }
-    function flatten(tree,prefix=""){ const out=[]; tree.forEach(n=>{ const label=prefix?`${prefix} / ${n.name}`:n.name; out.push({id:n.id,name:n.name,label}); if(n.children?.length) out.push(...flatten(n.children,label));}); return out; }
-    function findNode(tree,id){ for(const n of tree){ if(n.id===id) return n; const f=n.children?.length && findNode(n.children,id); if(f) return f; } return null; }
+    const cardsEl = document.getElementById("cards");
+    const emptyEl = document.getElementById("emptyState");
+    const searchEl = document.getElementById("search");
+    const treeEl = document.getElementById("folderTree");
 
-    // ---------- render folder tree ----------
+    // ---------- Folder tree (read-only here) ----------
+    const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36);
+    function loadTree(){
+      try{const t=JSON.parse(localStorage.getItem(FOLDERS_KEY)||"[]");normalize(t);return t;}catch{return []}
+    }
+    function normalize(nodes){nodes.forEach(n=>{if(!n.id)n.id=uid();if(!Array.isArray(n.children))n.children=[];normalize(n.children);});}
     function renderTree(){
-      const ul = document.getElementById("folderTree");
-      ul.innerHTML = "";
-      const tree = ensureIds(loadFoldersTree());
-      const mapping = JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY) || "{}");
-
-      function noteCountFor(folderId){
-        return Object.values(mapping).filter(id => id===folderId).length;
-      }
-
-      function makeBranch(nodes, parentEl){
-        nodes.forEach(node=>{
-          const li = document.createElement("li");
-          li.dataset.id = node.id;
-          li.textContent = `${node.name}`;
-          const count = noteCountFor(node.id);
-          if (count>0){ const s = document.createElement("span"); s.textContent = ` (${count})`; s.style.color="#bdbdbd"; li.appendChild(s); }
-          // drop target
-          li.addEventListener("dragover", e => { e.preventDefault(); li.classList.add("drop-target"); });
-          li.addEventListener("dragleave", () => li.classList.remove("drop-target"));
-          li.addEventListener("drop", e => {
-            e.preventDefault();
-            li.classList.remove("drop-target");
-            const noteTitle = e.dataTransfer.getData("text/plain");
-            if (!noteTitle) return;
-            const map = JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY) || "{}");
-            map[noteTitle] = node.id;
-            localStorage.setItem(NOTE_FOLDER_KEY, JSON.stringify(map));
-            showStatus(`Filed “${noteTitle}” into “${node.name}”.`, true);
-            renderTree(); // refresh counts
-          });
-
-          parentEl.appendChild(li);
-
-          if (node.children?.length){
-            const child = document.createElement("ul");
-            child.className = "tree";
-            parentEl.appendChild(child);
-            makeBranch(node.children, child);
-          }
-        });
-      }
-      makeBranch(tree, ul);
+      const t = loadTree();
+      treeEl.innerHTML="";
+      t.forEach(n=>treeEl.appendChild(renderNode(n)));
     }
+    function renderNode(node){
+      const wrap=document.createElement("div");wrap.className="node";
+      const header=document.createElement("div");header.className="node-header";
+      const toggle=document.createElement("span");toggle.className="toggle";toggle.textContent=node._collapsed?"+":"−";
+      toggle.onclick=()=>{node._collapsed=!node._collapsed; saveTreeChange(node.id,n=>n._collapsed=node._collapsed); renderTree();}
+      const name=document.createElement("span");name.textContent=node.name;
+      header.appendChild(toggle);header.appendChild(name);wrap.appendChild(header);
+      const ch=document.createElement("div");ch.className="children"; if(node._collapsed) ch.style.display="none";
+      node.children.forEach(c=>ch.appendChild(renderNode(c))); wrap.appendChild(ch);
+      return wrap;
+    }
+    function saveTreeChange(id, mut){
+      const t=loadTree();
+      const f=findNode(id,t); if(f){mut(f); localStorage.setItem(FOLDERS_KEY,JSON.stringify(t));}
+    }
+    function findNode(id, nodes){for(const n of nodes){if(n.id===id) return n; const r=findNode(id,n.children); if(r) return r;} return null;}
 
-    // ---------- notes list ----------
+    // ---------- Notes ----------
     let allNotes = [];
-    async function loadNotes(){
-      const res = await fetch(`${API_BASE}/notes`, { headers: { "Authorization": "Bearer "+sessionId }});
+    let noteFolderMap = JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY)||"{}");
+
+    async function fetchNotes(){
+      const res = await fetch(`${API_BASE}/notes`, { headers: { "Authorization":"Bearer "+sessionId }});
       const data = await res.json();
       if (!res.ok) throw new Error(data?.detail || data?.message || "Failed to load notes");
-      allNotes = (data.data?.notes) || [];
-      drawList(allNotes);
+      allNotes = data.notes || [];
+      renderNotes();
     }
 
-    function drawList(list){
-      const el = document.getElementById("list"); el.innerHTML="";
-      const map = JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY) || "{}");
-      const tree = loadFoldersTree();
-      const flat = flatten(tree);
+    function renderNotes(){
+      const q = (searchEl.value||"").toLowerCase();
+      const list = allNotes.filter(n => n.title.toLowerCase().includes(q) || (n.preview||"").toLowerCase().includes(q));
+      cardsEl.innerHTML = "";
+      if (list.length === 0){ emptyEl.style.display="block"; return; } else emptyEl.style.display="none";
+
+      // prepare folder select options
+      const flatFolders = flatten(loadTree());
+      const optsHtml = ['<option value="">— No folder —</option>', ...flatFolders.map(f=>`<option value="${f.id}">${f.label}</option>`)].join("");
 
       list.forEach(n=>{
-        const row = document.createElement("div");
-        row.className = "note";
-        row.draggable = true;
-        row.addEventListener("dragstart", e => { e.dataTransfer.setData("text/plain", n.title); });
+        const card=document.createElement("div"); card.className="card";
+        const title=document.createElement("div"); title.className="title"; title.textContent=n.title;
+        const meta=document.createElement("div"); meta.className="meta"; meta.textContent=`Edited ${n.modified_at}`;
+        const prev=document.createElement("div"); prev.textContent=n.preview||"";
 
-        const left = document.createElement("div");
-        left.innerHTML = `<strong>${n.title}</strong><div class="subtle">${(n.preview||"").toString()}</div>`;
+        // folder select
+        const sel = document.createElement("select"); sel.className="select";
+        sel.innerHTML = optsHtml;
+        sel.value = noteFolderMap[n.title] || "";
+        sel.onchange = ()=>{ noteFolderMap[n.title]=sel.value; localStorage.setItem(NOTE_FOLDER_KEY, JSON.stringify(noteFolderMap)); };
 
-        const right = document.createElement("div");
-        right.className = "actions";
-        const folderId = map[n.title];
-        if (folderId){
-          const fName = flat.find(f=>f.id===folderId)?.label || "Folder";
-          const badge = document.createElement("span"); badge.className="badge"; badge.textContent = fName;
-          right.appendChild(badge);
-        }
+        const actions=document.createElement("div"); actions.className="actions";
+        const viewBtn=btn("Open",()=>openNote(n.title));
+        const editBtn=btn("Edit",()=>editNote(n.title));
+        const delBtn=btn("Delete",()=>deleteNote(n.title),"danger");
+        actions.append(viewBtn, editBtn, delBtn);
 
-        const viewBtn = document.createElement("button");
-        viewBtn.className = "btn"; viewBtn.textContent = "Open";
-        viewBtn.onclick = () => location.href = `view_note.html?title=${encodeURIComponent(n.title)}`;
-        right.appendChild(viewBtn);
-
-        row.append(left, right);
-        el.appendChild(row);
+        card.append(title, meta, prev, sel, actions);
+        cardsEl.appendChild(card);
       });
     }
 
-    // ---------- root drop (unfile) ----------
-    const rootDrop = document.getElementById("rootDrop");
-    rootDrop.addEventListener("drop", e => {
-      e.preventDefault();
-      const title = e.dataTransfer.getData("text/plain");
-      const map = JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY) || "{}");
-      if (title in map){ delete map[title]; localStorage.setItem(NOTE_FOLDER_KEY, JSON.stringify(map)); showStatus(`Unfiled “${title}”.`, true); renderTree(); }
-    });
+    function btn(label, fn, extra=""){ const b=document.createElement("button"); b.className="btn "+extra; b.textContent=label; b.onclick=fn; return b; }
 
-    // ---------- search ----------
-    document.getElementById("searchBox").addEventListener("input", e=>{
-      const q = e.target.value.toLowerCase();
-      const filtered = allNotes.filter(n =>
-        n.title.toLowerCase().includes(q) || (n.preview||"").toLowerCase().includes(q)
-      );
-      drawList(filtered);
-    });
-
-    // ---------- status ----------
-    function showStatus(msg, ok=false){
-      const el = document.getElementById("status");
-      el.textContent = msg;
-      el.className = "status " + (ok ? "ok" : "err");
-      setTimeout(()=>{ el.textContent=""; el.className="status"; }, 2000);
+    function flatten(tree, prefix=""){
+      const out=[];
+      tree.forEach(node=>{
+        const label=prefix?`${prefix} / ${node.name}`:node.name;
+        out.push({id:node.id,label});
+        if(node.children?.length) out.push(...flatten(node.children,label));
+      });
+      return out;
     }
 
-    // ---------- init ----------
-    (async function init(){
-      try{
-        renderTree();
-        await loadNotes();
-      }catch(e){ showStatus(e.message||"Failed to initialize"); }
-    })();
+    async function openNote(title){
+      // loads full and shows a quick viewer with options to go back
+      location.href = `view_note.html?title=${encodeURIComponent(title)}`;
+    }
+
+    async function editNote(title){
+      const full = await (await fetch(`${API_BASE}/notes/${encodeURIComponent(title)}`, { headers:{ "Authorization":"Bearer "+sessionId }})).json();
+      if (!full?.success){ alert(full?.message || "Failed to load note"); return; }
+      const current = full.data?.note?.content || "";
+      const updated = prompt(`Edit "${title}" (content only; title can't be changed):`, current);
+      if (updated == null) return;
+      const res = await fetch(`${API_BASE}/notes/${encodeURIComponent(title)}`, {
+        method:"PUT",
+        headers:{ "Authorization":"Bearer "+sessionId, "Content-Type":"application/json" },
+        body: JSON.stringify({ content: updated })
+      });
+      const data = await res.json();
+      if (!res.ok){ alert(data?.detail||data?.message||"Update failed"); return; }
+      await fetchNotes();
+    }
+
+    async function deleteNote(title){
+      if (!confirm(`Delete "${title}"?`)) return;
+      const res = await fetch(`${API_BASE}/notes/${encodeURIComponent(title)}`, {
+        method:"DELETE",
+        headers:{ "Authorization":"Bearer "+sessionId }
+      });
+      const data = await res.json();
+      if (!res.ok){ alert(data?.detail||data?.message||"Delete failed"); return; }
+      await fetchNotes();
+      // also remove folder mapping
+      delete noteFolderMap[title];
+      localStorage.setItem(NOTE_FOLDER_KEY, JSON.stringify(noteFolderMap));
+    }
+
+    document.getElementById("newFolder").addEventListener("click", ()=>{
+      const t = loadTree();
+      const name = prompt("Folder name:");
+      if (!name || !name.trim()) return;
+      t.push({ id: uid(), name: name.trim(), children: [] });
+      localStorage.setItem(FOLDERS_KEY, JSON.stringify(t));
+      renderTree();
+      // notify other tabs
+      window.dispatchEvent(new StorageEvent('storage', { key: FOLDERS_KEY, newValue: JSON.stringify(t) }));
+    });
+
+    searchEl.addEventListener("input", renderNotes);
+
+    // Init
+    renderTree();
+    fetchNotes().catch(err=>{ cardsEl.innerHTML=""; emptyEl.style.display="block"; emptyEl.textContent=err.message||"Failed to load notes"; });
   </script>
 </body>
 </html>
