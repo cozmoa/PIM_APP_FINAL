@@ -32,25 +32,14 @@
     }
     .folders { margin-top: 20px; }
     .folder {
-      padding: 6px 10px;
+      padding: 8px 10px;
       border-radius: 8px;
       background: #222;
-      margin-bottom: 6px;
+      margin-bottom: 8px;
       cursor: pointer;
-      position: relative;
     }
     .folder:hover { background: #333; }
-    .folder .toggle {
-      cursor: pointer;
-      margin-right: 6px;
-      font-size: 12px;
-      user-select: none;
-    }
-    .subfolder {
-      margin-left: 20px;
-      background: #1a1a1a;
-    }
-    .children { margin-left: 16px; }
+    .subfolder { margin-left: 20px; }
     .add-folder-btn {
       margin-top: 12px;
       padding: 8px;
@@ -120,6 +109,7 @@
       text-align: center;
       cursor: pointer;
       box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+      transition: background 0.2s ease;
     }
     .widget:hover { background: #222; }
     /* Context menu */
@@ -163,12 +153,12 @@
       <input type="text" class="search" placeholder="Search..." />
     </div>
     <div class="widgets">
-      <div class="widget">Create Note</div>
-      <div class="widget">View Folder</div>
-      <div class="widget">Todo List</div>
-      <div class="widget">Reminders</div>
-      <div class="widget">View Notes</div>
-      <div class="widget">Stats</div>
+      <div class="widget" onclick="window.location.href='create_note.html'">Create Note</div>
+      <div class="widget" onclick="window.location.href='view_folders.html'">View Folder</div>
+      <div class="widget" onclick="window.location.href='todo.html'">Todo List</div>
+      <div class="widget" onclick="window.location.href='reminders.html'">Reminders</div>
+      <div class="widget" onclick="window.location.href='notes.html'">View Notes</div>
+      <div class="widget" onclick="window.location.href='stats.html'">Stats</div>
     </div>
   </div>
 
@@ -179,127 +169,117 @@
   </div>
 
   <script>
-    const folderList = document.getElementById('folderList');
-    const addFolderBtn = document.getElementById('addFolderBtn');
-    const contextMenu = document.getElementById('contextMenu');
+    const username = localStorage.getItem("username") || "guest";
+    const foldersKey = `${username}_folders`;
+    const folderList = document.getElementById("folderList");
+    const addFolderBtn = document.getElementById("addFolderBtn");
+    const contextMenu = document.getElementById("contextMenu");
     let selectedFolder = null;
 
-    // Save state
-    function saveState() {
-      const data = serializeFolders(folderList);
-      localStorage.setItem('folders', JSON.stringify(data));
-    }
+    function createFolder(name = "Untitled Folder", parent = folderList) {
+      const div = document.createElement("div");
+      div.className = "folder";
+      div.textContent = name;
+      div.draggable = true;
 
-    function serializeFolders(container) {
-      return [...container.children].map(child => ({
-        name: child.dataset.name || child.textContent,
-        children: serializeFolders(child.querySelector('.children') || { children: [] }),
-        expanded: child.dataset.expanded === "true"
-      }));
-    }
-
-    function loadState() {
-      const data = JSON.parse(localStorage.getItem('folders') || "[]");
-      data.forEach(f => createFolder(f, folderList));
-    }
-
-    function createFolder(data = { name: "Untitled Folder", children: [], expanded: true }, parent = folderList) {
-      const div = document.createElement('div');
-      div.className = 'folder';
-      div.dataset.name = data.name;
-      div.dataset.expanded = data.expanded;
-
-      const toggle = document.createElement('span');
-      toggle.className = 'toggle';
-      toggle.textContent = data.children.length ? (data.expanded ? "▼" : "▶") : "";
-      toggle.onclick = () => {
-        data.expanded = !(data.expanded === true);
-        div.dataset.expanded = data.expanded;
-        children.style.display = data.expanded ? "block" : "none";
-        toggle.textContent = data.expanded ? "▼" : "▶";
-        saveState();
-      };
-
-      const label = document.createElement('span');
-      label.textContent = data.name;
-
-      div.appendChild(toggle);
-      div.appendChild(label);
-
-      // Children container
-      const children = document.createElement('div');
-      children.className = 'children';
-      children.style.display = data.expanded ? "block" : "none";
-      div.appendChild(children);
-
-      // Right click menu
-      div.addEventListener('contextmenu', (e) => {
+      div.addEventListener("contextmenu", (e) => {
         e.preventDefault();
         selectedFolder = div;
-        contextMenu.style.display = 'flex';
+        contextMenu.style.display = "flex";
         contextMenu.style.left = e.pageX + "px";
         contextMenu.style.top = e.pageY + "px";
       });
 
-      // Add to parent
+      div.addEventListener("dblclick", () => startRename(div));
+
+      div.addEventListener("dragstart", () => {
+        selectedFolder = div;
+        div.classList.add("dragging");
+      });
+      div.addEventListener("dragend", () => {
+        div.classList.remove("dragging");
+        saveFolders();
+      });
+      div.addEventListener("dragover", (e) => e.preventDefault());
+      div.addEventListener("drop", (e) => {
+        e.preventDefault();
+        const dragged = document.querySelector(".dragging");
+        if (dragged && dragged !== div) {
+          dragged.classList.add("subfolder");
+          div.appendChild(dragged);
+        }
+      });
+
       parent.appendChild(div);
-
-      // Load children recursively
-      data.children.forEach(c => createFolder(c, children));
-
-      return div;
+      saveFolders();
     }
 
-    addFolderBtn.addEventListener('click', () => {
+    function startRename(folder) {
+      const oldName = folder.textContent;
+      const input = document.createElement("input");
+      input.type = "text";
+      input.value = oldName;
+      folder.textContent = "";
+      folder.appendChild(input);
+      input.focus();
+
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          folder.textContent = input.value.trim() || oldName;
+          saveFolders();
+        } else if (e.key === "Escape") {
+          folder.textContent = oldName;
+        }
+      });
+      input.addEventListener("blur", () => {
+        folder.textContent = input.value.trim() || oldName;
+        saveFolders();
+      });
+    }
+
+    addFolderBtn.addEventListener("click", () => {
       createFolder();
-      saveState();
     });
 
-    // Context menu actions
     function addSubfolder() {
       if (selectedFolder) {
-        const children = selectedFolder.querySelector('.children');
-        createFolder({ name: "New Subfolder", children: [], expanded: true }, children);
-        selectedFolder.dataset.expanded = "true";
-        selectedFolder.querySelector('.toggle').textContent = "▼";
-        children.style.display = "block";
-        saveState();
+        createFolder("New Subfolder", selectedFolder);
       }
-      contextMenu.style.display = 'none';
+      contextMenu.style.display = "none";
     }
     function renameFolder() {
-      if (selectedFolder) {
-        const oldName = selectedFolder.dataset.name;
-        const newName = prompt("Enter new name:", oldName);
-        if (newName && newName.trim()) {
-          selectedFolder.dataset.name = newName.trim();
-          selectedFolder.querySelector('span:nth-child(2)').textContent = newName.trim();
-          saveState();
-        }
-      }
-      contextMenu.style.display = 'none';
+      if (selectedFolder) startRename(selectedFolder);
+      contextMenu.style.display = "none";
     }
     function deleteFolder() {
-      if (selectedFolder) {
-        selectedFolder.remove();
-        saveState();
-      }
-      contextMenu.style.display = 'none';
+      if (selectedFolder) selectedFolder.remove();
+      saveFolders();
+      contextMenu.style.display = "none";
     }
 
-    // Close context menu
-    document.addEventListener('click', () => {
-      contextMenu.style.display = 'none';
+    document.addEventListener("click", () => {
+      contextMenu.style.display = "none";
     });
 
     function logout() {
-      localStorage.removeItem('sessionId');
-      localStorage.removeItem('username');
-      window.location.href = 'login.html';
+      localStorage.removeItem("sessionId");
+      localStorage.removeItem("username");
+      window.location.href = "login.html";
     }
 
-    // Init
-    loadState();
+    function saveFolders() {
+      const folders = Array.from(folderList.querySelectorAll(".folder")).map(f => ({
+        name: f.textContent,
+      }));
+      localStorage.setItem(foldersKey, JSON.stringify(folders));
+    }
+
+    function loadFolders() {
+      const folders = JSON.parse(localStorage.getItem(foldersKey) || "[]");
+      folders.forEach(f => createFolder(f.name));
+    }
+
+    loadFolders();
   </script>
 </body>
 </html>
