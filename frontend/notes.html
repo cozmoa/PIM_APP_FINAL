@@ -5,43 +5,27 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Notes • PIM</title>
   <style>
-    :root{--bg:#0a0a0a;--panel:#111;--card:#151515;--ink:#f5f5f5;--muted:#bdbdbd;--border:#2a2a2a;--accent:#fff}
+    :root{--bg:#0a0a0a;--card:#151515;--ink:#f5f5f5;--muted:#bdbdbd;--border:#2a2a2a;--accent:#fff}
     *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;display:flex;height:100vh}
-    .sidebar{width:280px;background:var(--panel);padding:16px;border-right:1px solid var(--border);display:flex;flex-direction:column}
-    .side-top{display:flex;justify-content:space-between;align-items:center}
-    .add-folder{padding:8px 10px;background:var(--accent);border:1px solid rgba(255,255,255,.35);border-radius:8px;color:#000;font-weight:700;cursor:pointer}
-    .tree{margin-top:10px}
-    .node{background:#1e1e1e;border:1px solid var(--border);padding:8px 10px;border-radius:8px;margin-bottom:8px;cursor:default}
-    .node-header{display:flex;align-items:center;gap:6px;user-select:none}
-    .toggle{width:16px;height:16px;border:1px solid var(--border);border-radius:4px;display:grid;place-items:center;font-size:11px;color:var(--muted);cursor:pointer}
-    .children{margin-left:18px;border-left:1px dashed var(--border);padding-left:12px;margin-top:6px}
-    .main{flex:1;padding:18px}
-    .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-    .back{color:var(--muted);text-decoration:none;border:1px solid var(--border);padding:6px 10px;border-radius:8px}
+    body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
+    .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+    .back{color:var(--muted);text-decoration:none;padding:6px 10px;border:1px solid var(--border);border-radius:8px}
     .search{padding:9px 12px;border-radius:10px;border:1px solid var(--border);background:#141414;color:var(--ink);width:300px}
-    .cards{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:12px}
+    .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
     .card{background:var(--card);border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
     .title{font-weight:700}
     .meta{font-size:12px;color:var(--muted)}
     .actions{display:flex;gap:8px;margin-top:6px}
     .btn{padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:#1b1b1b;color:var(--ink);cursor:pointer}
     .btn:hover{background:#222}
-    .danger{border-color:#733}
+    .danger{border-color:#733;color:#ffbdbd}
     .select{padding:6px 8px;border-radius:8px;background:#111;border:1px solid var(--border);color:var(--ink)}
-    .empty{color:var(--muted);margin-top:20px}
+    .empty{color:var(--muted);margin-top:20px;text-align:center}
   </style>
 </head>
 <body>
-  <aside class="sidebar">
-    <div class="side-top">
-      <h3>Folders</h3>
-      <button class="add-folder" id="newFolder">+ New</button>
-    </div>
-    <div id="folderTree" class="tree"></div>
-  </aside>
-
-  <main class="main">
+  <div class="wrap">
     <div class="topbar">
       <a class="back" href="dashboard.html">← Back</a>
       <input id="search" class="search" placeholder="Search notes…"/>
@@ -49,159 +33,101 @@
 
     <div id="cards" class="cards"></div>
     <p id="emptyState" class="empty" style="display:none">No notes yet. Try creating one on the dashboard.</p>
-  </main>
+  </div>
 
   <script>
-    // ----- API -----
-    const API_BASE = location.hostname.includes("localhost") ? "http://127.0.0.1:8000" : "https://pim-app-final.onrender.com";
+    const API_BASE = location.hostname.includes("localhost")
+      ? "http://127.0.0.1:8000"
+      : "https://pim-app-final.onrender.com";
     const username = localStorage.getItem("username") || "guest";
     const sessionId = localStorage.getItem("sessionId");
     if (!sessionId) location.href = "login.html";
 
     const FOLDERS_KEY = `${username}_foldersTree`;
-    const NOTE_FOLDER_KEY = `${username}_noteFolders`; // { [title]: folderId }
+    const NOTE_FOLDER_KEY = `${username}_noteFolders`;
 
     const cardsEl = document.getElementById("cards");
     const emptyEl = document.getElementById("emptyState");
     const searchEl = document.getElementById("search");
-    const treeEl = document.getElementById("folderTree");
 
-    // ---------- Folder tree (read-only here) ----------
-    const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36);
-    function loadTree(){
-      try{const t=JSON.parse(localStorage.getItem(FOLDERS_KEY)||"[]");normalize(t);return t;}catch{return []}
-    }
-    function normalize(nodes){nodes.forEach(n=>{if(!n.id)n.id=uid();if(!Array.isArray(n.children))n.children=[];normalize(n.children);});}
-    function renderTree(){
-      const t = loadTree();
-      treeEl.innerHTML="";
-      t.forEach(n=>treeEl.appendChild(renderNode(n)));
-    }
-    function renderNode(node){
-      const wrap=document.createElement("div");wrap.className="node";
-      const header=document.createElement("div");header.className="node-header";
-      const toggle=document.createElement("span");toggle.className="toggle";toggle.textContent=node._collapsed?"+":"−";
-      toggle.onclick=()=>{node._collapsed=!node._collapsed; saveTreeChange(node.id,n=>n._collapsed=node._collapsed); renderTree();}
-      const name=document.createElement("span");name.textContent=node.name;
-      header.appendChild(toggle);header.appendChild(name);wrap.appendChild(header);
-      const ch=document.createElement("div");ch.className="children"; if(node._collapsed) ch.style.display="none";
-      node.children.forEach(c=>ch.appendChild(renderNode(c))); wrap.appendChild(ch);
-      return wrap;
-    }
-    function saveTreeChange(id, mut){
-      const t=loadTree();
-      const f=findNode(id,t); if(f){mut(f); localStorage.setItem(FOLDERS_KEY,JSON.stringify(t));}
-    }
-    function findNode(id, nodes){for(const n of nodes){if(n.id===id) return n; const r=findNode(id,n.children); if(r) return r;} return null;}
-
-    // ---------- Notes ----------
     let allNotes = [];
     let noteFolderMap = JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY)||"{}");
 
+    // ---------- Folder helpers ----------
+    function flatten(tree,prefix=""){
+      const out=[];
+      tree.forEach(n=>{
+        const label=prefix?`${prefix} / ${n.name}`:n.name;
+        out.push({id:n.id,label});
+        if(n.children?.length) out.push(...flatten(n.children,label));
+      });
+      return out;
+    }
+    function loadTree(){ try{return JSON.parse(localStorage.getItem(FOLDERS_KEY)||"[]");}catch{return []} }
+
+    // ---------- Notes ----------
     async function fetchNotes(){
-      const res = await fetch(`${API_BASE}/notes`, { headers: { "Authorization":"Bearer "+sessionId }});
+      const res = await fetch(`${API_BASE}/notes`,{headers:{"Authorization":"Bearer "+sessionId}});
       const data = await res.json();
-      if (!res.ok) throw new Error(data?.detail || data?.message || "Failed to load notes");
+      if(!res.ok) throw new Error(data?.detail||data?.message||"Failed to load notes");
       allNotes = data.notes || [];
       renderNotes();
     }
 
     function renderNotes(){
-      const q = (searchEl.value||"").toLowerCase();
-      const list = allNotes.filter(n => n.title.toLowerCase().includes(q) || (n.preview||"").toLowerCase().includes(q));
-      cardsEl.innerHTML = "";
-      if (list.length === 0){ emptyEl.style.display="block"; return; } else emptyEl.style.display="none";
+      const q=(searchEl.value||"").toLowerCase();
+      const list = allNotes.filter(n=>n.title.toLowerCase().includes(q)||(n.preview||"").toLowerCase().includes(q));
+      cardsEl.innerHTML="";
+      if(list.length===0){emptyEl.style.display="block";return;}else emptyEl.style.display="none";
 
-      // prepare folder select options
-      const flatFolders = flatten(loadTree());
-      const optsHtml = ['<option value="">— No folder —</option>', ...flatFolders.map(f=>`<option value="${f.id}">${f.label}</option>`)].join("");
+      const flat=flatten(loadTree());
+      const opts=['<option value="">— No folder —</option>',...flat.map(f=>`<option value="${f.id}">${f.label}</option>`)].join("");
 
       list.forEach(n=>{
-        const card=document.createElement("div"); card.className="card";
-        const title=document.createElement("div"); title.className="title"; title.textContent=n.title;
-        const meta=document.createElement("div"); meta.className="meta"; meta.textContent=`Edited ${n.modified_at}`;
-        const prev=document.createElement("div"); prev.textContent=n.preview||"";
+        const c=document.createElement("div");c.className="card";
+        const title=document.createElement("div");title.className="title";title.textContent=n.title;
+        const meta=document.createElement("div");meta.className="meta";meta.textContent=`Edited ${n.modified_at}`;
+        const prev=document.createElement("div");prev.textContent=n.preview||"";
 
-        // folder select
-        const sel = document.createElement("select"); sel.className="select";
-        sel.innerHTML = optsHtml;
-        sel.value = noteFolderMap[n.title] || "";
-        sel.onchange = ()=>{ noteFolderMap[n.title]=sel.value; localStorage.setItem(NOTE_FOLDER_KEY, JSON.stringify(noteFolderMap)); };
+        const sel=document.createElement("select");sel.className="select";sel.innerHTML=opts;sel.value=noteFolderMap[n.title]||"";
+        sel.onchange=()=>{noteFolderMap[n.title]=sel.value;localStorage.setItem(NOTE_FOLDER_KEY,JSON.stringify(noteFolderMap));};
 
-        const actions=document.createElement("div"); actions.className="actions";
+        const actions=document.createElement("div");actions.className="actions";
         const viewBtn=btn("Open",()=>openNote(n.title));
         const editBtn=btn("Edit",()=>editNote(n.title));
         const delBtn=btn("Delete",()=>deleteNote(n.title),"danger");
-        actions.append(viewBtn, editBtn, delBtn);
+        actions.append(viewBtn,editBtn,delBtn);
 
-        card.append(title, meta, prev, sel, actions);
-        cardsEl.appendChild(card);
+        c.append(title,meta,prev,sel,actions);
+        cardsEl.appendChild(c);
       });
     }
 
-    function btn(label, fn, extra=""){ const b=document.createElement("button"); b.className="btn "+extra; b.textContent=label; b.onclick=fn; return b; }
-
-    function flatten(tree, prefix=""){
-      const out=[];
-      tree.forEach(node=>{
-        const label=prefix?`${prefix} / ${node.name}`:node.name;
-        out.push({id:node.id,label});
-        if(node.children?.length) out.push(...flatten(node.children,label));
-      });
-      return out;
-    }
+    function btn(label,fn,extra=""){const b=document.createElement("button");b.className="btn "+extra;b.textContent=label;b.onclick=fn;return b;}
 
     async function openNote(title){
-      // loads full and shows a quick viewer with options to go back
-      location.href = `view_note.html?title=${encodeURIComponent(title)}`;
+      location.href=`view_note.html?title=${encodeURIComponent(title)}`;
     }
-
     async function editNote(title){
-      const full = await (await fetch(`${API_BASE}/notes/${encodeURIComponent(title)}`, { headers:{ "Authorization":"Bearer "+sessionId }})).json();
-      if (!full?.success){ alert(full?.message || "Failed to load note"); return; }
-      const current = full.data?.note?.content || "";
-      const updated = prompt(`Edit "${title}" (content only; title can't be changed):`, current);
-      if (updated == null) return;
-      const res = await fetch(`${API_BASE}/notes/${encodeURIComponent(title)}`, {
-        method:"PUT",
-        headers:{ "Authorization":"Bearer "+sessionId, "Content-Type":"application/json" },
-        body: JSON.stringify({ content: updated })
-      });
-      const data = await res.json();
-      if (!res.ok){ alert(data?.detail||data?.message||"Update failed"); return; }
-      await fetchNotes();
+      const res=await fetch(`${API_BASE}/notes/${encodeURIComponent(title)}`,{headers:{"Authorization":"Bearer "+sessionId}});
+      const data=await res.json();if(!res.ok){alert(data?.message||"Failed");return;}
+      const current=data.data?.note?.content||"";
+      const updated=prompt(`Edit "${title}":`,current);if(updated==null)return;
+      const put=await fetch(`${API_BASE}/notes/${encodeURIComponent(title)}`,{method:"PUT",headers:{"Authorization":"Bearer "+sessionId,"Content-Type":"application/json"},body:JSON.stringify({content:updated})});
+      const out=await put.json();if(!put.ok){alert(out?.message||"Update failed");return;}
+      fetchNotes();
     }
-
     async function deleteNote(title){
-      if (!confirm(`Delete "${title}"?`)) return;
-      const res = await fetch(`${API_BASE}/notes/${encodeURIComponent(title)}`, {
-        method:"DELETE",
-        headers:{ "Authorization":"Bearer "+sessionId }
-      });
-      const data = await res.json();
-      if (!res.ok){ alert(data?.detail||data?.message||"Delete failed"); return; }
-      await fetchNotes();
-      // also remove folder mapping
+      if(!confirm(`Delete "${title}"?`))return;
+      const res=await fetch(`${API_BASE}/notes/${encodeURIComponent(title)}`,{method:"DELETE",headers:{"Authorization":"Bearer "+sessionId}});
+      const data=await res.json();if(!res.ok){alert(data?.message||"Delete failed");return;}
+      fetchNotes();
       delete noteFolderMap[title];
-      localStorage.setItem(NOTE_FOLDER_KEY, JSON.stringify(noteFolderMap));
+      localStorage.setItem(NOTE_FOLDER_KEY,JSON.stringify(noteFolderMap));
     }
 
-    document.getElementById("newFolder").addEventListener("click", ()=>{
-      const t = loadTree();
-      const name = prompt("Folder name:");
-      if (!name || !name.trim()) return;
-      t.push({ id: uid(), name: name.trim(), children: [] });
-      localStorage.setItem(FOLDERS_KEY, JSON.stringify(t));
-      renderTree();
-      // notify other tabs
-      window.dispatchEvent(new StorageEvent('storage', { key: FOLDERS_KEY, newValue: JSON.stringify(t) }));
-    });
-
-    searchEl.addEventListener("input", renderNotes);
-
-    // Init
-    renderTree();
-    fetchNotes().catch(err=>{ cardsEl.innerHTML=""; emptyEl.style.display="block"; emptyEl.textContent=err.message||"Failed to load notes"; });
+    searchEl.addEventListener("input",renderNotes);
+    fetchNotes().catch(e=>{emptyEl.style.display="block";emptyEl.textContent=e.message||"Failed";});
   </script>
 </body>
 </html>
