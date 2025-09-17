@@ -1,131 +1,127 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>View Folders • PIM</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Folders • PIM</title>
   <style>
-    :root{
-      --bg:#0a0a0a; --ink:#f5f5f5; --muted:#bdbdbd; --card:#111; --border:#333; --field:#1f1f1f;
-      --accent:#fff; --accent-ink:#000; --dim:#1a1a1a;
-    }
-    *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-    .wrap{max-width:900px;margin:24px auto;padding:0 16px}
-    .topbar{display:flex;gap:10px;align-items:center;margin-bottom:14px}
-    .back{color:var(--muted);text-decoration:none;padding:6px 10px;border:1px solid var(--border);border-radius:8px}
-    .card{background:var(--card);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:16px}
-    h1{margin:0 0 12px;font-size:20px}
-    .controls{display:flex;gap:8px;margin-bottom:10px}
-    button{padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.5);background:var(--accent);color:var(--accent-ink);font-weight:700;cursor:pointer}
-    .tree{list-style:none;margin:0;padding-left:0}
-    .node{
-      background:var(--dim); border:1px solid #222; border-radius:8px; margin:6px 0; padding:8px 10px;
-    }
-    .nodeHeader{display:flex;align-items:center;gap:8px;cursor:pointer}
-    .twisty{width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;
-      background:#222;border:1px solid #333;border-radius:6px;color:#bdbdbd;font-size:12px}
-    .name{flex:1}
-    .count{color:#bdbdbd;font-size:12px}
-    .children{margin-top:8px;padding-left:18px}
-    .hidden{display:none}
-    .status{margin-top:8px;height:18px;color:#9affc6}
+    :root{--bg:#0a0a0a;--card:#111;--ink:#f5f5f5;--muted:#bdbdbd;--line:#2a2a2a;--chip:#1e1e1e;--chip-border:#3a3a3a}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{max-width:980px;margin:24px auto;padding:0 16px}
+    .top{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+    .back{color:var(--muted);text-decoration:none;padding:6px 10px;border:1px solid #333;border-radius:8px}
+    .back:hover{background:#121212}
+    .card{background:var(--card);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:18px;box-shadow:0 10px 24px rgba(0,0,0,.5)}
+    .node{margin-left:14px;border-left:1px dashed var(--line);padding-left:10px}
+    .row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:8px}
+    .row:hover{background:#171717}
+    .caret{width:16px;text-align:center;color:#aaa;cursor:pointer}
+    .name{font-weight:600}
+    .kids{margin-top:6px}
+    .notes{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 0 24px}
+    .chip{padding:6px 8px;border:1px solid var(--chip-border);background:var(--chip);border-radius:999px;font-size:13px;cursor:grab}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="topbar">
+    <div class="top">
       <a class="back" href="dashboard.html">← Back</a>
-      <h1>Folders</h1>
+      <h1>Folder Structure</h1>
     </div>
-
-    <div class="card">
-      <div class="controls">
-        <button id="expandAll">Expand all</button>
-        <button id="collapseAll">Collapse all</button>
-      </div>
-      <ul id="tree" class="tree"></ul>
-      <div id="status" class="status"></div>
-    </div>
+    <div class="card" id="tree"></div>
   </div>
 
   <script>
-    // ---------- auth (uses only localStorage, but keep redirect consistent) ----------
-    const sessionId = localStorage.getItem("sessionId");
-    const username = localStorage.getItem("username") || "guest";
-    if (!sessionId) location.href = "login.html";
-
-    // ---------- storage keys ----------
+    const API_BASE = location.hostname.includes('localhost') ? 'http://127.0.0.1:8000' : 'https://pim-app-final.onrender.com';
+    const sessionId = localStorage.getItem('sessionId'); if(!sessionId) location.href='login.html';
+    const username = localStorage.getItem('username') || 'guest';
     const FOLDERS_KEY = `${username}_foldersTree`;
-    const LEGACY_FLAT_KEY = `${username}_folders`;
-    const NOTE_FOLDER_KEY = `${username}_noteFolders`; // { [title]: folderId }
+    const NOTE_FOLDER_KEY = `${username}_noteFolders`;
 
-    // ---------- helpers ----------
     function uid(){ return Math.random().toString(36).slice(2)+Date.now().toString(36); }
-    function ensureIds(tree){ tree.forEach(n=>{ if(!n.id) n.id=uid(); if(!Array.isArray(n.children)) n.children=[]; ensureIds(n.children);}); return tree; }
-    function loadFoldersTree(){
-      const m = localStorage.getItem(FOLDERS_KEY);
-      if (m) return JSON.parse(m);
-      const legacy = localStorage.getItem(LEGACY_FLAT_KEY);
-      if (legacy){
-        const arr = JSON.parse(legacy).map(name => ({ id: uid(), name, children: [] }));
-        localStorage.setItem(FOLDERS_KEY, JSON.stringify(arr));
-        return arr;
-      }
-      return [];
+    function loadTree(){ return JSON.parse(localStorage.getItem(FOLDERS_KEY) || '[]'); }
+    function ensureIds(tree){ tree.forEach(n=>{ if(!n.id) n.id=uid(); n.children = n.children||[]; ensureIds(n.children); }); return tree; }
+    async function fetchNotes(){
+      const res = await fetch(`${API_BASE}/notes`, { headers:{ Authorization:`Bearer ${sessionId}` }});
+      if(!res.ok) return []; const data=await res.json(); return data?.data?.notes||[];
     }
-    function saveFoldersTree(tree){ localStorage.setItem(FOLDERS_KEY, JSON.stringify(tree)); }
-    function loadMapping(){ return JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY) || "{}"); }
-    function countFor(folderId, map){ return Object.values(map).filter(id => id===folderId).length; }
 
-    // ---------- render ----------
     function render(){
-      const treeEl = document.getElementById("tree");
-      treeEl.innerHTML = "";
-      const tree = ensureIds(loadFoldersTree());
-      const map = loadMapping();
+      const t = document.getElementById('tree');
+      t.innerHTML='';
+      const raw = ensureIds(loadTree());
+      const map = JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY) || '{}');
 
-      function branch(nodes, parent){
-        nodes.forEach(node=>{
-          const li = document.createElement("li"); li.className="node";
-          const header = document.createElement("div"); header.className="nodeHeader";
-          const twist = document.createElement("span"); twist.className="twisty"; twist.textContent = nodesOpen[node.id] ? "−" : "+";
-          const name = document.createElement("div"); name.className="name"; name.textContent = node.name;
-          const cnt = document.createElement("span"); cnt.className="count"; const c = countFor(node.id, map); if (c>0) cnt.textContent = ` (${c} note${c>1?"s":""})`;
-          header.append(twist, name, cnt);
+      fetchNotes().then(notes=>{
+        raw.forEach(n=> t.appendChild(renderNode(n, notes, map)));
+      });
+    }
 
-          const kids = document.createElement("ul"); kids.className="children";
-          if (!nodesOpen[node.id]) kids.classList.add("hidden");
+    function renderNode(node, notes, map){
+      const wrap = document.createElement('div'); wrap.className='node';
+      const row = document.createElement('div'); row.className='row';
+      const caret = document.createElement('div'); caret.className='caret'; caret.textContent = node.children?.length ? '▾' : '•';
+      const name = document.createElement('div'); name.className='name'; name.textContent = node.name;
+      row.append(caret, name); wrap.appendChild(row);
 
-          header.addEventListener("click", ()=>{
-            nodesOpen[node.id] = !nodesOpen[node.id];
-            saveOpen();
-            render();
-          });
+      const kids = document.createElement('div'); kids.className='kids'; wrap.appendChild(kids);
+      const chips = document.createElement('div'); chips.className='notes'; wrap.appendChild(chips);
 
-          li.append(header, kids);
-          parent.appendChild(li);
-
-          if (node.children?.length) branch(node.children, kids);
+      function refresh(){
+        // children
+        kids.innerHTML='';
+        node.children?.forEach(ch=> kids.appendChild(renderNode(ch, notes, map)));
+        // notes mapped to this folder
+        chips.innerHTML='';
+        notes.filter(n=> map[n.title]===node.id).forEach(n=>{
+          const c = document.createElement('div'); c.className='chip'; c.textContent = n.title;
+          c.draggable = true;
+          c.ondragstart = e=> e.dataTransfer.setData('text/plain', n.title);
+          chips.appendChild(c);
         });
       }
+      refresh();
 
-      branch(tree, treeEl);
+      // drop target
+      row.ondragover = e=> e.preventDefault();
+      row.ondrop = e=>{
+        e.preventDefault();
+        const title = e.dataTransfer.getData('text/plain'); if(!title) return;
+        const m = JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY) || '{}');
+        m[title] = node.id; localStorage.setItem(NOTE_FOLDER_KEY, JSON.stringify(m));
+        render();
+      };
+
+      // expand/collapse
+      let expanded = true;
+      caret.onclick = ()=>{
+        if(!node.children?.length){ return; }
+        expanded = !expanded;
+        kids.style.display = expanded ? 'block':'none';
+        caret.textContent = expanded ? '▾':'▸';
+      };
+
+      // rename on dblclick
+      name.ondblclick = ()=>{
+        const old = node.name;
+        const input = document.createElement('input'); input.value = old; input.style.width='60%';
+        name.replaceChildren(input); input.focus();
+        const finish=(commit)=>{
+          const val = input.value.trim();
+          node.name = commit ? (val||old) : old;
+          saveTree(); render();
+        };
+        input.onkeydown = e=>{ if(e.key==='Enter') finish(true); if(e.key==='Escape') finish(false); };
+        input.onblur = ()=> finish(true);
+      };
+
+      return wrap;
     }
 
-    // remember expand/collapse
-    const OPEN_KEY = `${username}_foldersTree_open`;
-    let nodesOpen = JSON.parse(localStorage.getItem(OPEN_KEY) || "{}");
-    function saveOpen(){ localStorage.setItem(OPEN_KEY, JSON.stringify(nodesOpen)); }
-
-    document.getElementById("expandAll").addEventListener("click", ()=>{
-      const tree = loadFoldersTree();
-      function setAll(nodes){ nodes.forEach(n=>{ nodesOpen[n.id]=true; setAll(n.children||[]); }); }
-      setAll(tree); saveOpen(); render();
-    });
-    document.getElementById("collapseAll").addEventListener("click", ()=>{
-      nodesOpen = {}; saveOpen(); render();
-    });
+    function saveTree(){
+      const raw = ensureIds(loadTree());
+      localStorage.setItem(FOLDERS_KEY, JSON.stringify(raw));
+    }
 
     render();
   </script>

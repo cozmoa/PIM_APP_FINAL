@@ -5,129 +5,177 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Notes • PIM</title>
   <style>
-    :root{--bg:#0a0a0a;--card:#151515;--ink:#f5f5f5;--muted:#bdbdbd;--border:#2a2a2a;--accent:#fff}
-    *{box-sizing:border-box}
-    body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-    .wrap{max-width:1100px;margin:24px auto;padding:0 16px}
-    .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+    :root{--bg:#0a0a0a;--card:#111;--ink:#f5f5f5;--muted:#bdbdbd;--field:#1f1f1f;--border:#333;--accent:#fff;--accent-ink:#000}
+    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{max-width:980px;margin:24px auto;padding:0 16px}
+    .top{display:flex;align-items:center;gap:10px;margin-bottom:12px}
     .back{color:var(--muted);text-decoration:none;padding:6px 10px;border:1px solid var(--border);border-radius:8px}
-    .search{padding:9px 12px;border-radius:10px;border:1px solid var(--border);background:#141414;color:var(--ink);width:300px}
-    .cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
-    .card{background:var(--card);border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:8px}
+    .back:hover{background:#121212}
+    .card{background:var(--card);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:18px;box-shadow:0 10px 24px rgba(0,0,0,.5)}
+    .list{display:grid;gap:10px}
+    .note{display:grid;grid-template-columns:1fr 220px 170px;gap:10px;align-items:center;background:#151515;border:1px solid #2d2d2d;border-radius:10px;padding:12px}
     .title{font-weight:700}
-    .meta{font-size:12px;color:var(--muted)}
-    .actions{display:flex;gap:8px;margin-top:6px}
-    .btn{padding:7px 10px;border:1px solid var(--border);border-radius:8px;background:#1b1b1b;color:var(--ink);cursor:pointer}
-    .btn:hover{background:#222}
-    .danger{border-color:#733;color:#ffbdbd}
-    .select{padding:6px 8px;border-radius:8px;background:#111;border:1px solid var(--border);color:var(--ink)}
-    .empty{color:var(--muted);margin-top:20px;text-align:center}
+    .muted{color:var(--muted);font-size:12px}
+    select, input, textarea{background:var(--field);border:1px solid var(--border);color:var(--ink);border-radius:8px;padding:8px 10px}
+    .btn{padding:8px 10px;border:1px solid rgba(255,255,255,.5);background:var(--accent);color:var(--accent-ink);border-radius:8px;font-weight:700;cursor:pointer}
+    .btn.warn{background:#2a2a2a;color:#eee}
+    .row{display:flex;gap:8px;justify-content:flex-end}
+    .empty{padding:14px;color:var(--muted)}
+    dialog{border:none;border-radius:12px;background:#141414;color:var(--ink);padding:16px;border:1px solid #333}
+    dialog::backdrop{background:rgba(0,0,0,.6)}
+    .grid2{display:grid;gap:10px}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="topbar">
+    <div class="top">
       <a class="back" href="dashboard.html">← Back</a>
-      <input id="search" class="search" placeholder="Search notes…"/>
+      <h1>Notes</h1>
     </div>
 
-    <div id="cards" class="cards"></div>
-    <p id="emptyState" class="empty" style="display:none">No notes yet. Try creating one on the dashboard.</p>
+    <div class="card">
+      <div id="notes" class="list"></div>
+      <div id="empty" class="empty" style="display:none;">No notes yet. Create one from the dashboard.</div>
+    </div>
   </div>
 
-  <script>
-    const API_BASE = location.hostname.includes("localhost")
-      ? "http://127.0.0.1:8000"
-      : "https://pim-app-final.onrender.com";
-    const username = localStorage.getItem("username") || "guest";
-    const sessionId = localStorage.getItem("sessionId");
-    if (!sessionId) location.href = "login.html";
+  <dialog id="editDlg">
+    <form method="dialog" class="grid2">
+      <h3>Edit note</h3>
+      <label>Title <input id="editTitle"/></label>
+      <label>Content <textarea id="editBody" rows="10"></textarea></label>
+      <div class="row">
+        <button class="btn warn" value="cancel">Cancel</button>
+        <button class="btn" value="ok">Save</button>
+      </div>
+    </form>
+  </dialog>
 
+  <script>
+    const API_BASE = location.hostname.includes('localhost') ? 'http://127.0.0.1:8000' : 'https://pim-app-final.onrender.com';
+    const sessionId = localStorage.getItem('sessionId'); if(!sessionId) location.href='login.html';
+    const username = localStorage.getItem('username') || 'guest';
     const FOLDERS_KEY = `${username}_foldersTree`;
     const NOTE_FOLDER_KEY = `${username}_noteFolders`;
 
-    const cardsEl = document.getElementById("cards");
-    const emptyEl = document.getElementById("emptyState");
-    const searchEl = document.getElementById("search");
+    const notesEl = document.getElementById('notes'); const emptyEl = document.getElementById('empty');
+    const editDlg = document.getElementById('editDlg'); const editTitle = document.getElementById('editTitle'); const editBody = document.getElementById('editBody');
 
-    let allNotes = [];
-    let noteFolderMap = JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY)||"{}");
+    let allNotes = []; let editingOriginalTitle = null;
 
-    // ---------- Folder helpers ----------
-    function flatten(tree,prefix=""){
-      const out=[];
-      tree.forEach(n=>{
-        const label=prefix?`${prefix} / ${n.name}`:n.name;
-        out.push({id:n.id,label});
-        if(n.children?.length) out.push(...flatten(n.children,label));
-      });
-      return out;
+    function uid(){ return Math.random().toString(36).slice(2)+Date.now().toString(36); }
+    function loadTree(){ return JSON.parse(localStorage.getItem(FOLDERS_KEY) || '[]'); }
+    function ensureIds(tree){ tree.forEach(n=>{ if(!n.id) n.id=uid(); n.children = n.children||[]; ensureIds(n.children); }); return tree; }
+    function flatten(tree, prefix=''){ const out=[]; for(const n of tree){ const label = prefix? `${prefix} / ${n.name}`:n.name; out.push({id:n.id, name:n.name, label}); if(n.children?.length) out.push(...flatten(n.children, label)); } return out; }
+
+    async function loadNotes(){
+      const res = await fetch(`${API_BASE}/notes`, { headers:{ Authorization:`Bearer ${sessionId}` }});
+      const data = await res.json().catch(()=> ({}));
+      if(!res.ok){ notesEl.innerHTML=''; emptyEl.style.display='block'; return; }
+      allNotes = data?.data?.notes || [];
+      render();
     }
-    function loadTree(){ try{return JSON.parse(localStorage.getItem(FOLDERS_KEY)||"[]");}catch{return []} }
 
-    // ---------- Notes ----------
-    async function fetchNotes(){
-      const res = await fetch(`${API_BASE}/notes`,{headers:{"Authorization":"Bearer "+sessionId}});
+    function render(){
+      notesEl.innerHTML='';
+      const map = JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY) || '{}');
+      const flatFolders = flatten(ensureIds(loadTree()));
+      if(!allNotes.length){ emptyEl.style.display='block'; return; }
+      emptyEl.style.display='none';
+
+      for(const n of allNotes){
+        const row = document.createElement('div'); row.className='note';
+
+        const left = document.createElement('div');
+        left.innerHTML = `<div class="title">${n.title}</div><div class="muted">Modified: ${n.modified_at}</div>`;
+
+        const folderSel = document.createElement('select');
+        folderSel.innerHTML = `<option value="">— No folder —</option>` + flatFolders.map(f=> `<option value="${f.id}">${f.label}</option>`).join('');
+        if(map[n.title]) folderSel.value = map[n.title];
+        folderSel.onchange = ()=>{
+          const m = JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY) || '{}');
+          if(folderSel.value) m[n.title] = folderSel.value; else delete m[n.title];
+          localStorage.setItem(NOTE_FOLDER_KEY, JSON.stringify(m));
+        };
+
+        const actions = document.createElement('div'); actions.className='row';
+        const btnView = document.createElement('button'); btnView.className='btn sub'; btnView.textContent='View'; btnView.onclick = ()=> viewNote(n.title);
+        const btnEdit = document.createElement('button'); btnEdit.className='btn'; btnEdit.textContent='Edit'; btnEdit.onclick = ()=> openEdit(n);
+        const btnDel  = document.createElement('button'); btnDel.className='btn warn'; btnDel.textContent='Delete'; btnDel.onclick = ()=> delNote(n.title);
+
+        actions.append(btnView, btnEdit, btnDel);
+        row.append(left, folderSel, actions);
+        notesEl.appendChild(row);
+      }
+    }
+
+    async function viewNote(title){
+      // simple viewer: fetch and alert; you can route to a dedicated page if you like
+      const res = await fetch(`${API_BASE}/notes/${encodeURIComponent(title)}`, { headers:{ Authorization:`Bearer ${sessionId}` }});
       const data = await res.json();
-      if(!res.ok) throw new Error(data?.detail||data?.message||"Failed to load notes");
-      allNotes = data.notes || [];
-      renderNotes();
+      if(!res.ok){ alert(data?.detail || data?.message || 'Failed'); return; }
+      const note = data.data.note;
+      alert(`${note.title}\n\n${note.content}`);
     }
 
-    function renderNotes(){
-      const q=(searchEl.value||"").toLowerCase();
-      const list = allNotes.filter(n=>n.title.toLowerCase().includes(q)||(n.preview||"").toLowerCase().includes(q));
-      cardsEl.innerHTML="";
-      if(list.length===0){emptyEl.style.display="block";return;}else emptyEl.style.display="none";
-
-      const flat=flatten(loadTree());
-      const opts=['<option value="">— No folder —</option>',...flat.map(f=>`<option value="${f.id}">${f.label}</option>`)].join("");
-
-      list.forEach(n=>{
-        const c=document.createElement("div");c.className="card";
-        const title=document.createElement("div");title.className="title";title.textContent=n.title;
-        const meta=document.createElement("div");meta.className="meta";meta.textContent=`Edited ${n.modified_at}`;
-        const prev=document.createElement("div");prev.textContent=n.preview||"";
-
-        const sel=document.createElement("select");sel.className="select";sel.innerHTML=opts;sel.value=noteFolderMap[n.title]||"";
-        sel.onchange=()=>{noteFolderMap[n.title]=sel.value;localStorage.setItem(NOTE_FOLDER_KEY,JSON.stringify(noteFolderMap));};
-
-        const actions=document.createElement("div");actions.className="actions";
-        const viewBtn=btn("Open",()=>openNote(n.title));
-        const editBtn=btn("Edit",()=>editNote(n.title));
-        const delBtn=btn("Delete",()=>deleteNote(n.title),"danger");
-        actions.append(viewBtn,editBtn,delBtn);
-
-        c.append(title,meta,prev,sel,actions);
-        cardsEl.appendChild(c);
-      });
+    function openEdit(n){
+      editingOriginalTitle = n.title;
+      editTitle.value = n.title;
+      // get full content
+      fetch(`${API_BASE}/notes/${encodeURIComponent(n.title)}`, { headers:{ Authorization:`Bearer ${sessionId}` }})
+        .then(r=>r.json()).then(d=>{
+          editBody.value = d?.data?.note?.content || '';
+          editDlg.showModal();
+        });
     }
 
-    function btn(label,fn,extra=""){const b=document.createElement("button");b.className="btn "+extra;b.textContent=label;b.onclick=fn;return b;}
+    editDlg.addEventListener('close', async ()=>{
+      if(editDlg.returnValue!=='ok') return;
+      const newTitle = editTitle.value.trim();
+      const newBody  = editBody.value.trim();
+      if(!newTitle || !newBody){ alert('Title and content required'); return; }
 
-    async function openNote(title){
-      location.href=`view_note.html?title=${encodeURIComponent(title)}`;
-    }
-    async function editNote(title){
-      const res=await fetch(`${API_BASE}/notes/${encodeURIComponent(title)}`,{headers:{"Authorization":"Bearer "+sessionId}});
-      const data=await res.json();if(!res.ok){alert(data?.message||"Failed");return;}
-      const current=data.data?.note?.content||"";
-      const updated=prompt(`Edit "${title}":`,current);if(updated==null)return;
-      const put=await fetch(`${API_BASE}/notes/${encodeURIComponent(title)}`,{method:"PUT",headers:{"Authorization":"Bearer "+sessionId,"Content-Type":"application/json"},body:JSON.stringify({content:updated})});
-      const out=await put.json();if(!put.ok){alert(out?.message||"Update failed");return;}
-      fetchNotes();
-    }
-    async function deleteNote(title){
-      if(!confirm(`Delete "${title}"?`))return;
-      const res=await fetch(`${API_BASE}/notes/${encodeURIComponent(title)}`,{method:"DELETE",headers:{"Authorization":"Bearer "+sessionId}});
-      const data=await res.json();if(!res.ok){alert(data?.message||"Delete failed");return;}
-      fetchNotes();
-      delete noteFolderMap[title];
-      localStorage.setItem(NOTE_FOLDER_KEY,JSON.stringify(noteFolderMap));
+      try{
+        // If title changed: backend design uses title as identifier.
+        // Strategy: if title changed -> delete old, create new with same content.
+        if(newTitle !== editingOriginalTitle){
+          // update content under old title first (in case you only changed body)
+          await fetch(`${API_BASE}/notes/${encodeURIComponent(editingOriginalTitle)}`, {
+            method:'PUT', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${sessionId}` },
+            body: JSON.stringify({ content: newBody })
+          });
+          // create new note
+          const createRes = await fetch(`${API_BASE}/notes`, {
+            method:'POST', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${sessionId}` },
+            body: JSON.stringify({ title:newTitle, content:newBody })
+          });
+          if(!createRes.ok){ const d=await createRes.json(); throw new Error(d?.detail||d?.message||'Failed to create'); }
+          // delete old
+          await fetch(`${API_BASE}/notes/${encodeURIComponent(editingOriginalTitle)}`, { method:'DELETE', headers:{ Authorization:`Bearer ${sessionId}` }});
+          // move folder mapping
+          const map = JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY)||'{}');
+          if(map[editingOriginalTitle]){ map[newTitle] = map[editingOriginalTitle]; delete map[editingOriginalTitle]; localStorage.setItem(NOTE_FOLDER_KEY, JSON.stringify(map)); }
+        }else{
+          // only content change
+          const putRes = await fetch(`${API_BASE}/notes/${encodeURIComponent(newTitle)}`, {
+            method:'PUT', headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${sessionId}` },
+            body: JSON.stringify({ content:newBody })
+          });
+          if(!putRes.ok){ const d=await putRes.json(); throw new Error(d?.detail||d?.message||'Failed to save'); }
+        }
+        await loadNotes();
+      }catch(e){ alert(e.message||'Save failed'); }
+    });
+
+    async function delNote(title){
+      if(!confirm(`Delete "${title}"?`)) return;
+      const res = await fetch(`${API_BASE}/notes/${encodeURIComponent(title)}`, { method:'DELETE', headers:{ Authorization:`Bearer ${sessionId}` }});
+      if(!res.ok){ const d=await res.json(); alert(d?.detail||d?.message||'Delete failed'); return; }
+      const map = JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY)||'{}'); if(map[title]){ delete map[title]; localStorage.setItem(NOTE_FOLDER_KEY, JSON.stringify(map)); }
+      loadNotes();
     }
 
-    searchEl.addEventListener("input",renderNotes);
-    fetchNotes().catch(e=>{emptyEl.style.display="block";emptyEl.textContent=e.message||"Failed";});
+    loadNotes();
   </script>
 </body>
 </html>
