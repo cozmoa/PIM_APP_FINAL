@@ -5,129 +5,214 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Notes • PIM</title>
   <style>
-    body { background:#0a0a0a; color:#f5f5f5; font-family:system-ui,sans-serif; padding:20px; }
-    h1 { margin-bottom:20px; }
-    .grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
-    .note {
-      background:#1a1a1a;
-      padding:16px;
-      border-radius:12px;
-      cursor:pointer;
-      transition:background 0.2s ease;
+    :root{
+      --bg:#0a0a0a; --ink:#f5f5f5; --muted:#bdbdbd; --card:#111; --field:#1f1f1f; --border:#333; --accent:#fff; --accent-ink:#000;
+      --green:#9affc6;
     }
-    .note:hover { background:#222; }
-    .note h2 { margin:0 0 8px; font-size:18px; }
-    .note p { font-size:14px; color:#bbb; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
-    /* Modal */
-    .modal {
-      display:none;
-      position:fixed;
-      top:0; left:0;
-      width:100%; height:100%;
-      background:rgba(0,0,0,0.7);
-      justify-content:center;
-      align-items:center;
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    .layout{display:grid;grid-template-columns:260px 1fr;min-height:100vh}
+    .sidebar{background:#111;padding:16px;border-right:1px solid rgba(255,255,255,.1)}
+    .sidebar h2{margin:6px 0 10px;font-size:16px}
+    .tree{list-style:none;margin:0;padding:0}
+    .tree li{padding:6px 8px;border-radius:8px;margin:4px 0;background:#1a1a1a;cursor:pointer}
+    .tree li:hover{background:#222}
+    .drop-target{outline:2px dashed #3a3a3a}
+    .rootDrop{margin-top:10px;padding:8px;border:1px dashed #3a3a3a;border-radius:8px;color:#bdbdbd;text-align:center}
+    .content{padding:18px}
+    .topbar{display:flex;gap:10px;align-items:center;margin-bottom:12px}
+    .back{color:var(--muted);text-decoration:none;padding:6px 10px;border:1px solid var(--border);border-radius:8px}
+    .search{margin-left:auto;width:280px;background:var(--field);border:1px solid var(--border);color:var(--ink);padding:8px 10px;border-radius:8px}
+    .list{display:grid;gap:10px}
+    .note{
+      background:var(--card);border:1px solid rgba(255,255,255,.15);border-radius:12px;padding:12px;cursor:grab;
+      display:flex;justify-content:space-between;align-items:center
     }
-    .modal-content {
-      background:#1a1a1a;
-      padding:20px;
-      border-radius:12px;
-      width:500px;
-      max-width:90%;
-    }
-    .modal-content h2 { margin-top:0; }
-    .modal-content textarea {
-      width:100%;
-      height:200px;
-      background:#111;
-      color:#fff;
-      border:none;
-      border-radius:8px;
-      padding:10px;
-      margin-top:10px;
-    }
-    .actions { margin-top:10px; display:flex; gap:10px; }
-    button {
-      padding:8px 12px;
-      border:none;
-      border-radius:6px;
-      cursor:pointer;
-    }
-    .save { background:#fff; color:#000; font-weight:bold; }
-    .delete { background:#b33; color:#fff; }
-    .close { background:#333; color:#fff; }
+    .note:hover{background:#161616}
+    .badge{font-size:12px;color:#bdbdbd;background:#1f1f1f;border:1px solid #333;padding:4px 6px;border-radius:999px;margin-left:8px}
+    .actions{display:flex;gap:8px}
+    .btn{padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.5);background:var(--accent);color:var(--accent-ink);font-weight:700;cursor:pointer}
+    .subtle{font-size:12px;color:var(--muted);margin-top:6px}
+    .status{height:18px;margin-top:6px}
+    .ok{color:var(--green)} .err{color:#ffb3b3}
   </style>
 </head>
 <body>
-  <h1>Your Notes</h1>
-  <div class="grid" id="notesGrid"></div>
+  <div class="layout">
+    <aside class="sidebar">
+      <h2>Folders</h2>
+      <ul id="folderTree" class="tree"></ul>
+      <div id="rootDrop" class="rootDrop" ondragover="event.preventDefault()">Drop here to unfile</div>
+    </aside>
 
-  <!-- Modal -->
-  <div class="modal" id="noteModal">
-    <div class="modal-content">
-      <h2 id="modalTitle"></h2>
-      <textarea id="modalContent"></textarea>
-      <div class="actions">
-        <button class="save" onclick="saveNote()">Save</button>
-        <button class="delete" onclick="deleteNote()">Delete</button>
-        <button class="close" onclick="closeModal()">Close</button>
+    <main class="content">
+      <div class="topbar">
+        <a class="back" href="dashboard.html">← Back</a>
+        <button class="btn" onclick="location.href='create_note.html'">+ New Note</button>
+        <input id="searchBox" class="search" placeholder="Search notes…" />
       </div>
-    </div>
+
+      <div id="list" class="list"></div>
+      <div id="status" class="status"></div>
+      <div class="subtle">Tip: drag a note onto a folder on the left to file it.</div>
+    </main>
   </div>
 
   <script>
+    // ---------- API & auth ----------
+    const API_BASE = location.hostname.includes("localhost")
+      ? "http://127.0.0.1:8000"
+      : "https://pim-app-final.onrender.com";
+    const sessionId = localStorage.getItem("sessionId");
     const username = localStorage.getItem("username") || "guest";
-    let notes = JSON.parse(localStorage.getItem(username+"_notes") || "[]");
-    const grid = document.getElementById("notesGrid");
-    const modal = document.getElementById("noteModal");
-    const modalTitle = document.getElementById("modalTitle");
-    const modalContent = document.getElementById("modalContent");
+    if (!sessionId) location.href = "login.html";
 
-    let currentIndex = null;
+    // ---------- storage keys ----------
+    const FOLDERS_KEY = `${username}_foldersTree`;
+    const LEGACY_FLAT_KEY = `${username}_folders`;
+    const NOTE_FOLDER_KEY = `${username}_noteFolders`; // { [title]: folderId }
 
-    function saveNotes() {
-      localStorage.setItem(username+"_notes", JSON.stringify(notes));
+    // ---------- folder helpers ----------
+    function uid(){ return Math.random().toString(36).slice(2)+Date.now().toString(36); }
+    function ensureIds(tree){ tree.forEach(n=>{ if(!n.id) n.id=uid(); if(!Array.isArray(n.children)) n.children=[]; ensureIds(n.children);}); return tree; }
+    function loadFoldersTree(){
+      const m = localStorage.getItem(FOLDERS_KEY);
+      if (m) return JSON.parse(m);
+      const legacy = localStorage.getItem(LEGACY_FLAT_KEY);
+      if (legacy){
+        const arr = JSON.parse(legacy).map(name => ({ id: uid(), name, children: [] }));
+        localStorage.setItem(FOLDERS_KEY, JSON.stringify(arr));
+        return arr;
+      }
+      return [];
+    }
+    function saveFoldersTree(tree){ localStorage.setItem(FOLDERS_KEY, JSON.stringify(tree)); }
+    function flatten(tree,prefix=""){ const out=[]; tree.forEach(n=>{ const label=prefix?`${prefix} / ${n.name}`:n.name; out.push({id:n.id,name:n.name,label}); if(n.children?.length) out.push(...flatten(n.children,label));}); return out; }
+    function findNode(tree,id){ for(const n of tree){ if(n.id===id) return n; const f=n.children?.length && findNode(n.children,id); if(f) return f; } return null; }
+
+    // ---------- render folder tree ----------
+    function renderTree(){
+      const ul = document.getElementById("folderTree");
+      ul.innerHTML = "";
+      const tree = ensureIds(loadFoldersTree());
+      const mapping = JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY) || "{}");
+
+      function noteCountFor(folderId){
+        return Object.values(mapping).filter(id => id===folderId).length;
+      }
+
+      function makeBranch(nodes, parentEl){
+        nodes.forEach(node=>{
+          const li = document.createElement("li");
+          li.dataset.id = node.id;
+          li.textContent = `${node.name}`;
+          const count = noteCountFor(node.id);
+          if (count>0){ const s = document.createElement("span"); s.textContent = ` (${count})`; s.style.color="#bdbdbd"; li.appendChild(s); }
+          // drop target
+          li.addEventListener("dragover", e => { e.preventDefault(); li.classList.add("drop-target"); });
+          li.addEventListener("dragleave", () => li.classList.remove("drop-target"));
+          li.addEventListener("drop", e => {
+            e.preventDefault();
+            li.classList.remove("drop-target");
+            const noteTitle = e.dataTransfer.getData("text/plain");
+            if (!noteTitle) return;
+            const map = JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY) || "{}");
+            map[noteTitle] = node.id;
+            localStorage.setItem(NOTE_FOLDER_KEY, JSON.stringify(map));
+            showStatus(`Filed “${noteTitle}” into “${node.name}”.`, true);
+            renderTree(); // refresh counts
+          });
+
+          parentEl.appendChild(li);
+
+          if (node.children?.length){
+            const child = document.createElement("ul");
+            child.className = "tree";
+            parentEl.appendChild(child);
+            makeBranch(node.children, child);
+          }
+        });
+      }
+      makeBranch(tree, ul);
     }
 
-    function renderNotes() {
-      grid.innerHTML = '';
-      notes.forEach((note, i) => {
-        const div = document.createElement("div");
-        div.className = "note";
-        div.innerHTML = `<h2>${note.title}</h2><p>${note.content}</p>`;
-        div.onclick = () => openModal(i);
-        grid.appendChild(div);
+    // ---------- notes list ----------
+    let allNotes = [];
+    async function loadNotes(){
+      const res = await fetch(`${API_BASE}/notes`, { headers: { "Authorization": "Bearer "+sessionId }});
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.detail || data?.message || "Failed to load notes");
+      allNotes = (data.data?.notes) || [];
+      drawList(allNotes);
+    }
+
+    function drawList(list){
+      const el = document.getElementById("list"); el.innerHTML="";
+      const map = JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY) || "{}");
+      const tree = loadFoldersTree();
+      const flat = flatten(tree);
+
+      list.forEach(n=>{
+        const row = document.createElement("div");
+        row.className = "note";
+        row.draggable = true;
+        row.addEventListener("dragstart", e => { e.dataTransfer.setData("text/plain", n.title); });
+
+        const left = document.createElement("div");
+        left.innerHTML = `<strong>${n.title}</strong><div class="subtle">${(n.preview||"").toString()}</div>`;
+
+        const right = document.createElement("div");
+        right.className = "actions";
+        const folderId = map[n.title];
+        if (folderId){
+          const fName = flat.find(f=>f.id===folderId)?.label || "Folder";
+          const badge = document.createElement("span"); badge.className="badge"; badge.textContent = fName;
+          right.appendChild(badge);
+        }
+
+        const viewBtn = document.createElement("button");
+        viewBtn.className = "btn"; viewBtn.textContent = "Open";
+        viewBtn.onclick = () => location.href = `view_note.html?title=${encodeURIComponent(n.title)}`;
+        right.appendChild(viewBtn);
+
+        row.append(left, right);
+        el.appendChild(row);
       });
     }
 
-    function openModal(index) {
-      currentIndex = index;
-      modalTitle.textContent = notes[index].title;
-      modalContent.value = notes[index].content;
-      modal.style.display = "flex";
-    }
-    function closeModal() {
-      modal.style.display = "none";
-      currentIndex = null;
-    }
-    function saveNote() {
-      if (currentIndex !== null) {
-        notes[currentIndex].content = modalContent.value;
-        saveNotes();
-        renderNotes();
-        closeModal();
-      }
-    }
-    function deleteNote() {
-      if (currentIndex !== null) {
-        notes.splice(currentIndex,1);
-        saveNotes();
-        renderNotes();
-        closeModal();
-      }
+    // ---------- root drop (unfile) ----------
+    const rootDrop = document.getElementById("rootDrop");
+    rootDrop.addEventListener("drop", e => {
+      e.preventDefault();
+      const title = e.dataTransfer.getData("text/plain");
+      const map = JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY) || "{}");
+      if (title in map){ delete map[title]; localStorage.setItem(NOTE_FOLDER_KEY, JSON.stringify(map)); showStatus(`Unfiled “${title}”.`, true); renderTree(); }
+    });
+
+    // ---------- search ----------
+    document.getElementById("searchBox").addEventListener("input", e=>{
+      const q = e.target.value.toLowerCase();
+      const filtered = allNotes.filter(n =>
+        n.title.toLowerCase().includes(q) || (n.preview||"").toLowerCase().includes(q)
+      );
+      drawList(filtered);
+    });
+
+    // ---------- status ----------
+    function showStatus(msg, ok=false){
+      const el = document.getElementById("status");
+      el.textContent = msg;
+      el.className = "status " + (ok ? "ok" : "err");
+      setTimeout(()=>{ el.textContent=""; el.className="status"; }, 2000);
     }
 
-    renderNotes();
+    // ---------- init ----------
+    (async function init(){
+      try{
+        renderTree();
+        await loadNotes();
+      }catch(e){ showStatus(e.message||"Failed to initialize"); }
+    })();
   </script>
 </body>
 </html>

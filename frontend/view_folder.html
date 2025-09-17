@@ -5,69 +5,129 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>View Folders • PIM</title>
   <style>
-    :root { --bg:#0a0a0a; --card-bg:#1a1a1a; --text:#f5f5f5; }
-    body { background:var(--bg); color:var(--text); font:15px system-ui; margin:0; padding:20px; }
-    h1 { margin-bottom:20px; display:flex; align-items:center; gap:12px; }
-    ul { list-style:none; padding-left:0; }
-    li { margin:6px 0; }
-    .node { display:flex; align-items:center; gap:8px; cursor:pointer; background:#222; padding:6px 10px; border-radius:8px; }
-    .toggle { width:20px; text-align:center; opacity:.8; }
-    .children { margin-left:18px; }
-    .back { margin-top:20px; padding:10px 14px; background:#222; border:none; border-radius:8px; color:var(--text); cursor:pointer; }
+    :root{
+      --bg:#0a0a0a; --ink:#f5f5f5; --muted:#bdbdbd; --card:#111; --border:#333; --field:#1f1f1f;
+      --accent:#fff; --accent-ink:#000; --dim:#1a1a1a;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{max-width:900px;margin:24px auto;padding:0 16px}
+    .topbar{display:flex;gap:10px;align-items:center;margin-bottom:14px}
+    .back{color:var(--muted);text-decoration:none;padding:6px 10px;border:1px solid var(--border);border-radius:8px}
+    .card{background:var(--card);border:1px solid rgba(255,255,255,.15);border-radius:14px;padding:16px}
+    h1{margin:0 0 12px;font-size:20px}
+    .controls{display:flex;gap:8px;margin-bottom:10px}
+    button{padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.5);background:var(--accent);color:var(--accent-ink);font-weight:700;cursor:pointer}
+    .tree{list-style:none;margin:0;padding-left:0}
+    .node{
+      background:var(--dim); border:1px solid #222; border-radius:8px; margin:6px 0; padding:8px 10px;
+    }
+    .nodeHeader{display:flex;align-items:center;gap:8px;cursor:pointer}
+    .twisty{width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;
+      background:#222;border:1px solid #333;border-radius:6px;color:#bdbdbd;font-size:12px}
+    .name{flex:1}
+    .count{color:#bdbdbd;font-size:12px}
+    .children{margin-top:8px;padding-left:18px}
+    .hidden{display:none}
+    .status{margin-top:8px;height:18px;color:#9affc6}
   </style>
 </head>
 <body>
-  <h1>Folder Structure</h1>
-  <ul id="tree"></ul>
-  <button class="back" onclick="window.location.href='dashboard.html'">← Back</button>
+  <div class="wrap">
+    <div class="topbar">
+      <a class="back" href="dashboard.html">← Back</a>
+      <h1>Folders</h1>
+    </div>
+
+    <div class="card">
+      <div class="controls">
+        <button id="expandAll">Expand all</button>
+        <button id="collapseAll">Collapse all</button>
+      </div>
+      <ul id="tree" class="tree"></ul>
+      <div id="status" class="status"></div>
+    </div>
+  </div>
 
   <script>
-    const API_BASE = location.hostname.includes("localhost") ? "http://127.0.0.1:8000" : "https://pim-app-final.onrender.com";
+    // ---------- auth (uses only localStorage, but keep redirect consistent) ----------
     const sessionId = localStorage.getItem("sessionId");
-    if (!sessionId) { location.href = "login.html"; }
-    const authz = { "Authorization": "Bearer " + sessionId };
+    const username = localStorage.getItem("username") || "guest";
+    if (!sessionId) location.href = "login.html";
 
-    const treeEl = document.getElementById("tree");
+    // ---------- storage keys ----------
+    const FOLDERS_KEY = `${username}_foldersTree`;
+    const LEGACY_FLAT_KEY = `${username}_folders`;
+    const NOTE_FOLDER_KEY = `${username}_noteFolders`; // { [title]: folderId }
 
-    async function loadFolders() {
-      const res = await fetch(`${API_BASE}/folders`, { headers: authz });
-      const folders = (await res.json()).data || [];
-      treeEl.innerHTML = "";
-      folders.forEach(n => treeEl.appendChild(renderNode(n)));
+    // ---------- helpers ----------
+    function uid(){ return Math.random().toString(36).slice(2)+Date.now().toString(36); }
+    function ensureIds(tree){ tree.forEach(n=>{ if(!n.id) n.id=uid(); if(!Array.isArray(n.children)) n.children=[]; ensureIds(n.children);}); return tree; }
+    function loadFoldersTree(){
+      const m = localStorage.getItem(FOLDERS_KEY);
+      if (m) return JSON.parse(m);
+      const legacy = localStorage.getItem(LEGACY_FLAT_KEY);
+      if (legacy){
+        const arr = JSON.parse(legacy).map(name => ({ id: uid(), name, children: [] }));
+        localStorage.setItem(FOLDERS_KEY, JSON.stringify(arr));
+        return arr;
+      }
+      return [];
     }
+    function saveFoldersTree(tree){ localStorage.setItem(FOLDERS_KEY, JSON.stringify(tree)); }
+    function loadMapping(){ return JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY) || "{}"); }
+    function countFor(folderId, map){ return Object.values(map).filter(id => id===folderId).length; }
 
-    function renderNode(node) {
-      const li = document.createElement("li");
-      const header = document.createElement("div");
-      header.className = "node";
-      const hasChildren = node.children && node.children.length;
-      const toggle = document.createElement("span");
-      toggle.className = "toggle";
-      toggle.textContent = hasChildren ? "▸" : "•";
+    // ---------- render ----------
+    function render(){
+      const treeEl = document.getElementById("tree");
+      treeEl.innerHTML = "";
+      const tree = ensureIds(loadFoldersTree());
+      const map = loadMapping();
 
-      const name = document.createElement("span");
-      name.textContent = node.name;
+      function branch(nodes, parent){
+        nodes.forEach(node=>{
+          const li = document.createElement("li"); li.className="node";
+          const header = document.createElement("div"); header.className="nodeHeader";
+          const twist = document.createElement("span"); twist.className="twisty"; twist.textContent = nodesOpen[node.id] ? "−" : "+";
+          const name = document.createElement("div"); name.className="name"; name.textContent = node.name;
+          const cnt = document.createElement("span"); cnt.className="count"; const c = countFor(node.id, map); if (c>0) cnt.textContent = ` (${c} note${c>1?"s":""})`;
+          header.append(twist, name, cnt);
 
-      header.appendChild(toggle);
-      header.appendChild(name);
-      li.appendChild(header);
+          const kids = document.createElement("ul"); kids.className="children";
+          if (!nodesOpen[node.id]) kids.classList.add("hidden");
 
-      if (hasChildren) {
-        const children = document.createElement("ul");
-        children.className = "children";
-        children.style.display = "none";
-        node.children.forEach(ch => children.appendChild(renderNode(ch)));
-        li.appendChild(children);
-        header.addEventListener("click", () => {
-          const open = children.style.display !== "none";
-          children.style.display = open ? "none" : "block";
-          toggle.textContent = open ? "▸" : "▾";
+          header.addEventListener("click", ()=>{
+            nodesOpen[node.id] = !nodesOpen[node.id];
+            saveOpen();
+            render();
+          });
+
+          li.append(header, kids);
+          parent.appendChild(li);
+
+          if (node.children?.length) branch(node.children, kids);
         });
       }
-      return li;
+
+      branch(tree, treeEl);
     }
 
-    loadFolders();
+    // remember expand/collapse
+    const OPEN_KEY = `${username}_foldersTree_open`;
+    let nodesOpen = JSON.parse(localStorage.getItem(OPEN_KEY) || "{}");
+    function saveOpen(){ localStorage.setItem(OPEN_KEY, JSON.stringify(nodesOpen)); }
+
+    document.getElementById("expandAll").addEventListener("click", ()=>{
+      const tree = loadFoldersTree();
+      function setAll(nodes){ nodes.forEach(n=>{ nodesOpen[n.id]=true; setAll(n.children||[]); }); }
+      setAll(tree); saveOpen(); render();
+    });
+    document.getElementById("collapseAll").addEventListener("click", ()=>{
+      nodesOpen = {}; saveOpen(); render();
+    });
+
+    render();
   </script>
 </body>
 </html>

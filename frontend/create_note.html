@@ -6,139 +6,193 @@
   <title>Create Note • PIM</title>
   <style>
     :root {
-      --bg: #0a0a0a;
-      --card-bg: #1a1a1a;
-      --text: #f5f5f5;
-      --muted: #bdbdbd;
-      --accent: #fff;
+      --bg:#0a0a0a; --card:#111; --ink:#f5f5f5; --muted:#bdbdbd;
+      --field:#1f1f1f; --border:#333; --accent:#fff; --accent-ink:#000;
     }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font: 16px system-ui, sans-serif;
-      margin: 0; padding: 0;
-      display: flex;
-      height: 100vh;
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    .wrap{max-width:900px;margin:24px auto;padding:0 16px}
+    .topbar{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+    .back{color:var(--muted);text-decoration:none;padding:6px 10px;border:1px solid var(--border);border-radius:8px}
+    .back:hover{background:#121212}
+    .card{background:var(--card);border:1px solid rgba(255,255,255,.2);border-radius:14px;padding:18px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+    h1{margin:0 0 12px;font-size:20px}
+    label{display:block;font-size:13px;color:var(--muted);margin:10px 0 6px}
+    input,textarea,select{
+      width:100%;background:var(--field);border:1px solid var(--border);color:var(--ink);
+      padding:10px 12px;border-radius:10px;outline:none
     }
-    .sidebar {
-      width: 260px;
-      background: #111;
-      padding: 20px;
-      overflow-y: auto;
+    input:focus,textarea:focus,select:focus{border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.12)}
+    textarea{resize:vertical;min-height:220px}
+    .row{display:grid;grid-template-columns:1fr 300px;gap:16px}
+    .actions{margin-top:14px;display:flex;gap:10px;align-items:center}
+    button{
+      padding:10px 14px;border:1px solid rgba(255,255,255,.6);background:var(--accent);
+      color:var(--accent-ink);border-radius:10px;font-weight:700;cursor:pointer
     }
-    .folder, .note {
-      padding: 6px 10px;
-      margin-bottom: 6px;
-      border-radius: 6px;
-      background: #222;
-      cursor: grab;
-    }
-    .folder:hover, .note:hover { background: #333; }
-    .main {
-      flex: 1;
-      padding: 20px;
-    }
-    input, textarea {
-      width: 100%;
-      padding: 10px;
-      margin-bottom: 12px;
-      border: 1px solid #444;
-      border-radius: 8px;
-      background: #1a1a1a;
-      color: var(--text);
-    }
-    button {
-      padding: 10px 14px;
-      border: none;
-      border-radius: 8px;
-      background: var(--accent);
-      color: var(--bg);
-      font-weight: bold;
-      cursor: pointer;
-    }
+    .hint{font-size:12px;color:var(--muted)}
+    .error{margin-top:8px;color:#ffb3b3;min-height:18px}
+    .ok{margin-top:8px;color:#9affc6;min-height:18px}
   </style>
 </head>
 <body>
-  <div class="sidebar">
-    <h3>Your Folders</h3>
-    <div id="folderList"></div>
-    <h3>Your Notes</h3>
-    <div id="noteList"></div>
-  </div>
+  <div class="wrap">
+    <div class="topbar">
+      <a class="back" href="dashboard.html">← Back</a>
+      <span class="hint">Tip: you can file a note into a folder right away.</span>
+    </div>
 
-  <div class="main">
-    <h1>Create a Note</h1>
-    <form id="noteForm">
-      <input type="text" id="title" placeholder="Note title" required />
-      <textarea id="body" placeholder="Note body..." rows="8" required></textarea>
-      <button type="submit">Save Note</button>
-    </form>
+    <div class="card">
+      <h1>Create Note</h1>
+      <div class="row">
+        <div>
+          <label for="title">Title</label>
+          <input id="title" placeholder="e.g., Project kickoff summary" />
+
+          <label for="content">Body</label>
+          <textarea id="content" placeholder="Write your note..."></textarea>
+        </div>
+
+        <div>
+          <label for="folderPick">Folder (optional)</label>
+          <select id="folderPick">
+            <option value="">— No folder —</option>
+          </select>
+          <div class="actions" style="margin-top:10px">
+            <button id="btnSave">Save</button>
+            <button id="btnNewFolder" type="button">+ New Folder</button>
+          </div>
+          <p class="hint">Folders are stored per-user in your browser. Notes content is saved to the backend.</p>
+        </div>
+      </div>
+
+      <div id="msg" class="ok"></div>
+      <div id="err" class="error"></div>
+    </div>
   </div>
 
   <script>
+    // ---------- API base ----------
+    const API_BASE = location.hostname.includes("localhost")
+      ? "http://127.0.0.1:8000"
+      : "https://pim-app-final.onrender.com";
+
+    // ---------- Auth guard ----------
+    const sessionId = localStorage.getItem("sessionId");
     const username = localStorage.getItem("username") || "guest";
-    const foldersKey = `${username}_folders`;
-    const notesKey = `${username}_notes`;
+    if (!sessionId) location.href = "login.html";
 
-    const folderList = document.getElementById("folderList");
-    const noteList = document.getElementById("noteList");
-    const noteForm = document.getElementById("noteForm");
+    // ---------- Storage keys ----------
+    const FOLDERS_KEY = `${username}_foldersTree`;
+    const LEGACY_FLAT_KEY = `${username}_folders`;
+    const NOTE_FOLDER_KEY = `${username}_noteFolders`; // { [title]: folderId }
 
-    function loadFolders() {
-      const folders = JSON.parse(localStorage.getItem(foldersKey) || "[]");
-      folderList.innerHTML = "";
-      folders.forEach(f => {
-        const div = document.createElement("div");
-        div.className = "folder";
-        div.textContent = f.name;
-        div.dataset.name = f.name;
-        div.ondrop = e => dropNoteOnFolder(e, f.name);
-        div.ondragover = e => e.preventDefault();
-        folderList.appendChild(div);
+    // ---------- Folder helpers ----------
+    function uid(){ return Math.random().toString(36).slice(2) + Date.now().toString(36); }
+
+    function loadFoldersTree(){
+      const modern = localStorage.getItem(FOLDERS_KEY);
+      if (modern) return JSON.parse(modern);
+
+      // migrate legacy flat list if present
+      const legacy = localStorage.getItem(LEGACY_FLAT_KEY);
+      if (legacy){
+        const arr = JSON.parse(legacy).map(name => ({ id: uid(), name, children: [] }));
+        localStorage.setItem(FOLDERS_KEY, JSON.stringify(arr));
+        return arr;
+      }
+      return [];
+    }
+    function saveFoldersTree(tree){ localStorage.setItem(FOLDERS_KEY, JSON.stringify(tree)); }
+
+    function flattenFolders(tree, prefix = ""){
+      const out = [];
+      tree.forEach(node => {
+        const label = prefix ? `${prefix} / ${node.name}` : node.name;
+        out.push({ id: node.id, name: node.name, label });
+        if (node.children?.length) out.push(...flattenFolders(node.children, label));
+      });
+      return out;
+    }
+
+    function ensureIds(tree){
+      tree.forEach(n => {
+        if (!n.id) n.id = uid();
+        if (!Array.isArray(n.children)) n.children = [];
+        ensureIds(n.children);
+      });
+      return tree;
+    }
+
+    function addFolderModal(){
+      const name = prompt("Folder name:");
+      if (!name || !name.trim()) return;
+      const tree = loadFoldersTree();
+      tree.push({ id: uid(), name: name.trim(), children: [] });
+      saveFoldersTree(tree);
+      populateFolderPicker(); // refresh options
+    }
+
+    function populateFolderPicker(){
+      const pick = document.getElementById("folderPick");
+      const tree = ensureIds(loadFoldersTree());
+      // reset
+      pick.innerHTML = `<option value="">— No folder —</option>`;
+      const flat = flattenFolders(tree);
+      flat.forEach(f => {
+        const opt = document.createElement("option");
+        opt.value = f.id;
+        opt.textContent = f.label;
+        pick.appendChild(opt);
       });
     }
 
-    function loadNotes() {
-      const notes = JSON.parse(localStorage.getItem(notesKey) || "[]");
-      noteList.innerHTML = "";
-      notes.forEach((n, i) => {
-        const div = document.createElement("div");
-        div.className = "note";
-        div.textContent = n.title;
-        div.draggable = true;
-        div.dataset.index = i;
-        div.ondragstart = e => e.dataTransfer.setData("noteIndex", i);
-        noteList.appendChild(div);
-      });
-    }
-
-    function dropNoteOnFolder(e, folderName) {
-      e.preventDefault();
-      const noteIndex = e.dataTransfer.getData("noteIndex");
-      if (noteIndex === "") return;
-      const notes = JSON.parse(localStorage.getItem(notesKey) || "[]");
-      const note = notes[noteIndex];
-      note.folder = folderName;
-      notes[noteIndex] = note;
-      localStorage.setItem(notesKey, JSON.stringify(notes));
-      alert(`Moved "${note.title}" to folder "${folderName}"`);
-    }
-
-    noteForm.addEventListener("submit", e => {
-      e.preventDefault();
+    // ---------- Note save ----------
+    async function saveNote(){
       const title = document.getElementById("title").value.trim();
-      const body = document.getElementById("body").value.trim();
-      if (!title || !body) return;
+      const content = document.getElementById("content").value.trim();
+      const folderId = document.getElementById("folderPick").value;
 
-      const notes = JSON.parse(localStorage.getItem(notesKey) || "[]");
-      notes.push({ title, body, folder: null });
-      localStorage.setItem(notesKey, JSON.stringify(notes));
-      loadNotes();
-      noteForm.reset();
-    });
+      const msg = document.getElementById("msg");
+      const err = document.getElementById("err");
+      msg.textContent = ""; err.textContent = "";
 
-    loadFolders();
-    loadNotes();
+      if (!title || !content){
+        err.textContent = "Please provide both title and content.";
+        return;
+      }
+
+      try{
+        const res = await fetch(`${API_BASE}/notes`, {
+          method: "POST",
+          headers: {
+            "Authorization": "Bearer " + sessionId,
+            "Content-Type": "application/json"
+          },
+          // IMPORTANT: backend expects 'content', not 'body'
+          body: JSON.stringify({ title, content })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data?.detail || data?.message || "Failed to save note");
+
+        // map to folder (local) if chosen
+        if (folderId){
+          const map = JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY) || "{}");
+          map[title] = folderId;
+          localStorage.setItem(NOTE_FOLDER_KEY, JSON.stringify(map));
+        }
+
+        msg.textContent = "Saved! Redirecting to notes…";
+        setTimeout(() => location.href = "notes.html", 650);
+      }catch(e){
+        err.textContent = e.message || "Something went wrong.";
+      }
+    }
+
+    // ---------- Init ----------
+    document.getElementById("btnSave").addEventListener("click", saveNote);
+    document.getElementById("btnNewFolder").addEventListener("click", addFolderModal);
+    populateFolderPicker();
   </script>
 </body>
 </html>

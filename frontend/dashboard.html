@@ -131,7 +131,9 @@
       cursor: pointer;
       font-size: 14px;
     }
-    .context-menu button:hover { background: #333; }
+    .context-menu button:hover {
+      background: #333;
+    }
   </style>
 </head>
 <body>
@@ -154,7 +156,7 @@
     </div>
     <div class="widgets">
       <div class="widget" onclick="window.location.href='create_note.html'">Create Note</div>
-      <div class="widget" onclick="window.location.href='view_folders.html'">View Folders</div>
+      <div class="widget" onclick="window.location.href='view_folder.html'">View Folder</div>
       <div class="widget" onclick="window.location.href='todo.html'">Todo List</div>
       <div class="widget" onclick="window.location.href='reminders.html'">Reminders</div>
       <div class="widget" onclick="window.location.href='notes.html'">View Notes</div>
@@ -169,19 +171,35 @@
   </div>
 
   <script>
-    const username = localStorage.getItem("username") || "guest";
-    const foldersKey = `${username}_folders`;
+    const API_BASE = location.hostname.includes("localhost")
+      ? "http://127.0.0.1:8000"
+      : "https://pim-app-final.onrender.com";
+    const sessionId = localStorage.getItem("sessionId");
+    if (!sessionId) location.href = "login.html";
+    const auth = { "Authorization": "Bearer " + sessionId, "Content-Type": "application/json" };
+
     const folderList = document.getElementById("folderList");
     const addFolderBtn = document.getElementById("addFolderBtn");
     const contextMenu = document.getElementById("contextMenu");
     let selectedFolder = null;
 
-    function createFolder(name = "Untitled Folder", parent = folderList) {
+    // --- Load folders from backend
+    async function loadFolders() {
+      const res = await fetch(`${API_BASE}/folders`, { headers: auth });
+      const data = await res.json();
+      folderList.innerHTML = "";
+      (data.data?.folders || []).forEach(f => createFolder(f.name, folderList, f.id));
+    }
+
+    // --- Create folder element
+    function createFolder(name = "Untitled", parent = folderList, id = null) {
       const div = document.createElement("div");
       div.className = "folder";
       div.textContent = name;
+      if (id) div.dataset.id = id;
       div.draggable = true;
 
+      // Context menu
       div.addEventListener("contextmenu", (e) => {
         e.preventDefault();
         selectedFolder = div;
@@ -190,30 +208,38 @@
         contextMenu.style.top = e.pageY + "px";
       });
 
+      // Rename
       div.addEventListener("dblclick", () => startRename(div));
 
-      div.addEventListener("dragstart", () => {
-        selectedFolder = div;
-        div.classList.add("dragging");
-      });
-      div.addEventListener("dragend", () => {
-        div.classList.remove("dragging");
-        saveFolders();
-      });
+      // Drag & drop note assignment
       div.addEventListener("dragover", (e) => e.preventDefault());
-      div.addEventListener("drop", (e) => {
+      div.addEventListener("drop", async (e) => {
         e.preventDefault();
-        const dragged = document.querySelector(".dragging");
-        if (dragged && dragged !== div) {
-          dragged.classList.add("subfolder");
-          div.appendChild(dragged);
-        }
+        const noteTitle = e.dataTransfer.getData("text/plain");
+        if (!noteTitle) return;
+        await fetch(`${API_BASE}/folders/assign-note`, {
+          method: "POST",
+          headers: auth,
+          body: JSON.stringify({ title: noteTitle, folder_id: parseInt(div.dataset.id) })
+        });
+        alert(`Note "${noteTitle}" assigned to folder "${div.textContent}"`);
       });
 
       parent.appendChild(div);
-      saveFolders();
     }
 
+    // --- Add folder
+    addFolderBtn.addEventListener("click", async () => {
+      const name = prompt("Enter folder name:");
+      if (!name) return;
+      const res = await fetch(`${API_BASE}/folders`, {
+        method:"POST", headers:auth, body:JSON.stringify({ name })
+      });
+      const data = await res.json();
+      if (data.success) loadFolders();
+    });
+
+    // --- Rename folder
     function startRename(folder) {
       const oldName = folder.textContent;
       const input = document.createElement("input");
@@ -223,60 +249,49 @@
       folder.appendChild(input);
       input.focus();
 
-      input.addEventListener("keydown", (e) => {
+      input.addEventListener("keydown", async (e) => {
         if (e.key === "Enter") {
-          folder.textContent = input.value.trim() || oldName;
-          saveFolders();
+          const newName = input.value.trim() || oldName;
+          folder.textContent = newName;
+          await fetch(`${API_BASE}/folders/${folder.dataset.id}`, {
+            method:"PUT", headers:auth, body:JSON.stringify({ name:newName })
+          });
         } else if (e.key === "Escape") {
           folder.textContent = oldName;
         }
       });
-      input.addEventListener("blur", () => {
-        folder.textContent = input.value.trim() || oldName;
-        saveFolders();
-      });
+      input.addEventListener("blur", () => folder.textContent = oldName);
     }
 
-    addFolderBtn.addEventListener("click", () => {
-      createFolder();
-    });
-
+    // --- Context menu actions
     function addSubfolder() {
-      if (selectedFolder) {
-        createFolder("New Subfolder", selectedFolder);
-      }
+      if (selectedFolder) createFolder("New Subfolder", selectedFolder);
       contextMenu.style.display = "none";
     }
-    function renameFolder() {
+    async function renameFolder() {
       if (selectedFolder) startRename(selectedFolder);
       contextMenu.style.display = "none";
     }
-    function deleteFolder() {
-      if (selectedFolder) selectedFolder.remove();
-      saveFolders();
+    async function deleteFolder() {
+      if (selectedFolder) {
+        await fetch(`${API_BASE}/folders/${selectedFolder.dataset.id}`, {
+          method:"DELETE", headers:auth
+        });
+        selectedFolder.remove();
+      }
       contextMenu.style.display = "none";
     }
 
+    // --- Close context menu
     document.addEventListener("click", () => {
       contextMenu.style.display = "none";
     });
 
+    // --- Logout
     function logout() {
       localStorage.removeItem("sessionId");
       localStorage.removeItem("username");
       window.location.href = "login.html";
-    }
-
-    function saveFolders() {
-      const folders = Array.from(folderList.querySelectorAll(".folder")).map(f => ({
-        name: f.textContent,
-      }));
-      localStorage.setItem(foldersKey, JSON.stringify(folders));
-    }
-
-    function loadFolders() {
-      const folders = JSON.parse(localStorage.getItem(foldersKey) || "[]");
-      folders.forEach(f => createFolder(f.name));
     }
 
     loadFolders();
