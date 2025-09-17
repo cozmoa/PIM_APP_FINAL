@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>View Folders • PIM</title>
+  <style>
+    body {
+      background: #0a0a0a;
+      color: #f5f5f5;
+      font: 16px system-ui, sans-serif;
+      margin: 0; padding: 20px;
+    }
+    .folder {
+      margin: 6px 0;
+      padding-left: 20px;
+      position: relative;
+    }
+    .folder::before {
+      content: "📁";
+      position: absolute;
+      left: 0;
+    }
+    .note {
+      margin: 4px 0 4px 20px;
+      padding-left: 20px;
+      position: relative;
+      font-size: 14px;
+      color: #bdbdbd;
+    }
+    .note::before {
+      content: "📝";
+      position: absolute;
+      left: 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Folders & Notes</h1>
+  <div id="tree"></div>
+
+  <script>
+    const username = localStorage.getItem("username") || "guest";
+    const foldersKey = `${username}_folders`;
+    const notesKey = `${username}_notes`;
+
+    const tree = document.getElementById("tree");
+
+    function renderTree() {
+      const folders = JSON.parse(localStorage.getItem(foldersKey) || "[]");
+      const notes = JSON.parse(localStorage.getItem(notesKey) || "[]");
+      tree.innerHTML = "";
+
+      folders.forEach(f => {
+        const fDiv = document.createElement("div");
+        fDiv.className = "folder";
+        fDiv.textContent = f.name;
+
+        const childNotes = notes.filter(n => n.folder === f.name);
+        childNotes.forEach(n => {
+          const nDiv = document.createElement("div");
+          nDiv.className = "note";
+          nDiv.textContent = n.title;
+          fDiv.appendChild(nDiv);
+        });
+
+        tree.appendChild(fDiv);
+      });
+
+      // Notes without folder
+      const orphanNotes = notes.filter(n => !n.folder);
+      if (orphanNotes.length) {
+        const fDiv = document.createElement("div");
+        fDiv.className = "folder";
+        fDiv.textContent = "Unsorted";
+
+        orphanNotes.forEach(n => {
+          const nDiv = document.createElement("div");
+          nDiv.className = "note";
+          nDiv.textContent = n.title;
+          fDiv.appendChild(nDiv);
+        });
+
+        tree.appendChild(fDiv);
+      }
+    }
+
+    renderTree();
+  </script>
+</body>
+</html>

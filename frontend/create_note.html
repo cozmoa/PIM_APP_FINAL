@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Create Note • PIM</title>
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --card-bg: #1a1a1a;
+      --text: #f5f5f5;
+      --muted: #bdbdbd;
+      --accent: #fff;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font: 16px system-ui, sans-serif;
+      margin: 0; padding: 0;
+      display: flex;
+      height: 100vh;
+    }
+    .sidebar {
+      width: 260px;
+      background: #111;
+      padding: 20px;
+      overflow-y: auto;
+    }
+    .folder, .note {
+      padding: 6px 10px;
+      margin-bottom: 6px;
+      border-radius: 6px;
+      background: #222;
+      cursor: grab;
+    }
+    .folder:hover, .note:hover { background: #333; }
+    .main {
+      flex: 1;
+      padding: 20px;
+    }
+    input, textarea {
+      width: 100%;
+      padding: 10px;
+      margin-bottom: 12px;
+      border: 1px solid #444;
+      border-radius: 8px;
+      background: #1a1a1a;
+      color: var(--text);
+    }
+    button {
+      padding: 10px 14px;
+      border: none;
+      border-radius: 8px;
+      background: var(--accent);
+      color: var(--bg);
+      font-weight: bold;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <h3>Your Folders</h3>
+    <div id="folderList"></div>
+    <h3>Your Notes</h3>
+    <div id="noteList"></div>
+  </div>
+
+  <div class="main">
+    <h1>Create a Note</h1>
+    <form id="noteForm">
+      <input type="text" id="title" placeholder="Note title" required />
+      <textarea id="body" placeholder="Note body..." rows="8" required></textarea>
+      <button type="submit">Save Note</button>
+    </form>
+  </div>
+
+  <script>
+    const username = localStorage.getItem("username") || "guest";
+    const foldersKey = `${username}_folders`;
+    const notesKey = `${username}_notes`;
+
+    const folderList = document.getElementById("folderList");
+    const noteList = document.getElementById("noteList");
+    const noteForm = document.getElementById("noteForm");
+
+    function loadFolders() {
+      const folders = JSON.parse(localStorage.getItem(foldersKey) || "[]");
+      folderList.innerHTML = "";
+      folders.forEach(f => {
+        const div = document.createElement("div");
+        div.className = "folder";
+        div.textContent = f.name;
+        div.dataset.name = f.name;
+        div.ondrop = e => dropNoteOnFolder(e, f.name);
+        div.ondragover = e => e.preventDefault();
+        folderList.appendChild(div);
+      });
+    }
+
+    function loadNotes() {
+      const notes = JSON.parse(localStorage.getItem(notesKey) || "[]");
+      noteList.innerHTML = "";
+      notes.forEach((n, i) => {
+        const div = document.createElement("div");
+        div.className = "note";
+        div.textContent = n.title;
+        div.draggable = true;
+        div.dataset.index = i;
+        div.ondragstart = e => e.dataTransfer.setData("noteIndex", i);
+        noteList.appendChild(div);
+      });
+    }
+
+    function dropNoteOnFolder(e, folderName) {
+      e.preventDefault();
+      const noteIndex = e.dataTransfer.getData("noteIndex");
+      if (noteIndex === "") return;
+      const notes = JSON.parse(localStorage.getItem(notesKey) || "[]");
+      const note = notes[noteIndex];
+      note.folder = folderName;
+      notes[noteIndex] = note;
+      localStorage.setItem(notesKey, JSON.stringify(notes));
+      alert(`Moved "${note.title}" to folder "${folderName}"`);
+    }
+
+    noteForm.addEventListener("submit", e => {
+      e.preventDefault();
+      const title = document.getElementById("title").value.trim();
+      const body = document.getElementById("body").value.trim();
+      if (!title || !body) return;
+
+      const notes = JSON.parse(localStorage.getItem(notesKey) || "[]");
+      notes.push({ title, body, folder: null });
+      localStorage.setItem(notesKey, JSON.stringify(notes));
+      loadNotes();
+      noteForm.reset();
+    });
+
+    loadFolders();
+    loadNotes();
+  </script>
+</body>
+</html>

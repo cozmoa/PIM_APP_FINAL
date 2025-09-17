@@ -30,18 +30,27 @@
       flex-direction: column;
       justify-content: space-between;
     }
-    .folders {
-      margin-top: 20px;
-    }
+    .folders { margin-top: 20px; }
     .folder {
-      padding: 8px 10px;
+      padding: 6px 10px;
       border-radius: 8px;
       background: #222;
-      margin-bottom: 8px;
+      margin-bottom: 6px;
       cursor: pointer;
+      position: relative;
     }
     .folder:hover { background: #333; }
-    .subfolder { margin-left: 20px; }
+    .folder .toggle {
+      cursor: pointer;
+      margin-right: 6px;
+      font-size: 12px;
+      user-select: none;
+    }
+    .subfolder {
+      margin-left: 20px;
+      background: #1a1a1a;
+    }
+    .children { margin-left: 16px; }
     .add-folder-btn {
       margin-top: 12px;
       padding: 8px;
@@ -132,9 +141,7 @@
       cursor: pointer;
       font-size: 14px;
     }
-    .context-menu button:hover {
-      background: #333;
-    }
+    .context-menu button:hover { background: #333; }
   </style>
 </head>
 <body>
@@ -177,13 +184,55 @@
     const contextMenu = document.getElementById('contextMenu');
     let selectedFolder = null;
 
-    function createFolder(name = "Untitled Folder", parent = folderList) {
+    // Save state
+    function saveState() {
+      const data = serializeFolders(folderList);
+      localStorage.setItem('folders', JSON.stringify(data));
+    }
+
+    function serializeFolders(container) {
+      return [...container.children].map(child => ({
+        name: child.dataset.name || child.textContent,
+        children: serializeFolders(child.querySelector('.children') || { children: [] }),
+        expanded: child.dataset.expanded === "true"
+      }));
+    }
+
+    function loadState() {
+      const data = JSON.parse(localStorage.getItem('folders') || "[]");
+      data.forEach(f => createFolder(f, folderList));
+    }
+
+    function createFolder(data = { name: "Untitled Folder", children: [], expanded: true }, parent = folderList) {
       const div = document.createElement('div');
       div.className = 'folder';
-      div.textContent = name;
-      div.draggable = true;
+      div.dataset.name = data.name;
+      div.dataset.expanded = data.expanded;
 
-      // Right click for context menu
+      const toggle = document.createElement('span');
+      toggle.className = 'toggle';
+      toggle.textContent = data.children.length ? (data.expanded ? "▼" : "▶") : "";
+      toggle.onclick = () => {
+        data.expanded = !(data.expanded === true);
+        div.dataset.expanded = data.expanded;
+        children.style.display = data.expanded ? "block" : "none";
+        toggle.textContent = data.expanded ? "▼" : "▶";
+        saveState();
+      };
+
+      const label = document.createElement('span');
+      label.textContent = data.name;
+
+      div.appendChild(toggle);
+      div.appendChild(label);
+
+      // Children container
+      const children = document.createElement('div');
+      children.className = 'children';
+      children.style.display = data.expanded ? "block" : "none";
+      div.appendChild(children);
+
+      // Right click menu
       div.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         selectedFolder = div;
@@ -192,72 +241,53 @@
         contextMenu.style.top = e.pageY + "px";
       });
 
-      // Rename with Enter
-      div.addEventListener('dblclick', () => startRename(div));
-
-      // Drag & drop
-      div.addEventListener('dragstart', () => {
-        selectedFolder = div;
-        div.classList.add('dragging');
-      });
-      div.addEventListener('dragend', () => {
-        div.classList.remove('dragging');
-      });
-      div.addEventListener('dragover', (e) => e.preventDefault());
-      div.addEventListener('drop', (e) => {
-        e.preventDefault();
-        const dragged = document.querySelector('.dragging');
-        if (dragged && dragged !== div) {
-          dragged.classList.add('subfolder');
-          div.appendChild(dragged);
-        }
-      });
-
+      // Add to parent
       parent.appendChild(div);
-    }
 
-    function startRename(folder) {
-      const oldName = folder.textContent;
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.value = oldName;
-      folder.textContent = '';
-      folder.appendChild(input);
-      input.focus();
+      // Load children recursively
+      data.children.forEach(c => createFolder(c, children));
 
-      input.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter') {
-          folder.textContent = input.value.trim() || oldName;
-        } else if (e.key === 'Escape') {
-          folder.textContent = oldName;
-        }
-      });
-      input.addEventListener('blur', () => {
-        folder.textContent = input.value.trim() || oldName;
-      });
+      return div;
     }
 
     addFolderBtn.addEventListener('click', () => {
       createFolder();
+      saveState();
     });
 
     // Context menu actions
     function addSubfolder() {
       if (selectedFolder) {
-        createFolder("New Subfolder", selectedFolder);
+        const children = selectedFolder.querySelector('.children');
+        createFolder({ name: "New Subfolder", children: [], expanded: true }, children);
+        selectedFolder.dataset.expanded = "true";
+        selectedFolder.querySelector('.toggle').textContent = "▼";
+        children.style.display = "block";
+        saveState();
       }
       contextMenu.style.display = 'none';
     }
     function renameFolder() {
-      if (selectedFolder) startRename(selectedFolder);
+      if (selectedFolder) {
+        const oldName = selectedFolder.dataset.name;
+        const newName = prompt("Enter new name:", oldName);
+        if (newName && newName.trim()) {
+          selectedFolder.dataset.name = newName.trim();
+          selectedFolder.querySelector('span:nth-child(2)').textContent = newName.trim();
+          saveState();
+        }
+      }
       contextMenu.style.display = 'none';
     }
     function deleteFolder() {
-      if (selectedFolder) selectedFolder.remove();
+      if (selectedFolder) {
+        selectedFolder.remove();
+        saveState();
+      }
       contextMenu.style.display = 'none';
     }
 
-    // Close context menu on click elsewhere
+    // Close context menu
     document.addEventListener('click', () => {
       contextMenu.style.display = 'none';
     });
@@ -267,6 +297,9 @@
       localStorage.removeItem('username');
       window.location.href = 'login.html';
     }
+
+    // Init
+    loadState();
   </script>
 </body>
 </html>
