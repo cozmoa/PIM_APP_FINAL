@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>View Folders • PIM</title>
+  <style>
+    :root { --bg:#0a0a0a; --card-bg:#1a1a1a; --text:#f5f5f5; }
+    body { background:var(--bg); color:var(--text); font:15px system-ui; margin:0; padding:20px; }
+    h1 { margin-bottom:20px; display:flex; align-items:center; gap:12px; }
+    ul { list-style:none; padding-left:0; }
+    li { margin:6px 0; }
+    .node { display:flex; align-items:center; gap:8px; cursor:pointer; background:#222; padding:6px 10px; border-radius:8px; }
+    .toggle { width:20px; text-align:center; opacity:.8; }
+    .children { margin-left:18px; }
+    .back { margin-top:20px; padding:10px 14px; background:#222; border:none; border-radius:8px; color:var(--text); cursor:pointer; }
+  </style>
+</head>
+<body>
+  <h1>Folder Structure</h1>
+  <ul id="tree"></ul>
+  <button class="back" onclick="window.location.href='dashboard.html'">← Back</button>
+
+  <script>
+    const API_BASE = location.hostname.includes("localhost") ? "http://127.0.0.1:8000" : "https://pim-app-final.onrender.com";
+    const sessionId = localStorage.getItem("sessionId");
+    if (!sessionId) { location.href = "login.html"; }
+    const authz = { "Authorization": "Bearer " + sessionId };
+
+    const treeEl = document.getElementById("tree");
+
+    async function loadFolders() {
+      const res = await fetch(`${API_BASE}/folders`, { headers: authz });
+      const folders = (await res.json()).data || [];
+      treeEl.innerHTML = "";
+      folders.forEach(n => treeEl.appendChild(renderNode(n)));
+    }
+
+    function renderNode(node) {
+      const li = document.createElement("li");
+      const header = document.createElement("div");
+      header.className = "node";
+      const hasChildren = node.children && node.children.length;
+      const toggle = document.createElement("span");
+      toggle.className = "toggle";
+      toggle.textContent = hasChildren ? "▸" : "•";
+
+      const name = document.createElement("span");
+      name.textContent = node.name;
+
+      header.appendChild(toggle);
+      header.appendChild(name);
+      li.appendChild(header);
+
+      if (hasChildren) {
+        const children = document.createElement("ul");
+        children.className = "children";
+        children.style.display = "none";
+        node.children.forEach(ch => children.appendChild(renderNode(ch)));
+        li.appendChild(children);
+        header.addEventListener("click", () => {
+          const open = children.style.display !== "none";
+          children.style.display = open ? "none" : "block";
+          toggle.textContent = open ? "▸" : "▾";
+        });
+      }
+      return li;
+    }
+
+    loadFolders();
+  </script>
+</body>
+</html>

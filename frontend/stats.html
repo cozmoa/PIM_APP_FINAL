@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Stats • PIM</title>
+  <style>
+    :root { --bg:#0a0a0a; --card-bg:#1a1a1a; --text:#f5f5f5; }
+    body { background:var(--bg); color:var(--text); font:15px system-ui; margin:0; padding:20px; }
+    h1 { margin-bottom:20px; }
+    .grid { display:grid; grid-template-columns: repeat(3, minmax(200px, 1fr)); gap:16px; }
+    .stat { background:var(--card-bg); padding:20px; border-radius:12px; }
+    .back { margin-top:20px; padding:10px 14px; background:#222; border:none; border-radius:8px; color:var(--text); cursor:pointer; }
+  </style>
+</head>
+<body>
+  <h1>Statistics</h1>
+  <div id="stats" class="grid"></div>
+  <button class="back" onclick="window.location.href='dashboard.html'">← Back</button>
+
+  <script>
+    const API_BASE = location.hostname.includes("localhost") ? "http://127.0.0.1:8000" : "https://pim-app-final.onrender.com";
+    const sessionId = localStorage.getItem("sessionId");
+    if (!sessionId) { location.href = "login.html"; }
+    const authz = { "Authorization": "Bearer " + sessionId };
+
+    async function loadStats() {
+      const res = await fetch(`${API_BASE}/stats`, { headers: authz });
+      const data = (await res.json()).data || {};
+      const el = document.getElementById("stats");
+      el.innerHTML = `
+        <div class="stat">Total Notes: ${data.notes ?? 0}</div>
+        <div class="stat">Total Todos: ${data.todos ?? 0}</div>
+        <div class="stat">Total Folders: ${data.folders ?? 0}</div>
+        <div class="stat">Total Reminders: ${data.reminders ?? 0}</div>
+        <div class="stat">Unique Tags: ${data.tags ?? 0}</div>
+        <div class="stat">Most Recent Note: ${data.recent_note?.title ?? "—"}</div>
+      `;
+    }
+    loadStats();
+  </script>
+</body>
+</html>
