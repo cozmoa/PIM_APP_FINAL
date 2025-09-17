@@ -23,7 +23,7 @@
     }
     /* Sidebar */
     .sidebar {
-      width: 240px;
+      width: 260px;
       background: var(--sidebar-bg);
       padding: 20px;
       display: flex;
@@ -41,6 +41,7 @@
       cursor: pointer;
     }
     .folder:hover { background: #333; }
+    .subfolder { margin-left: 20px; }
     .add-folder-btn {
       margin-top: 12px;
       padding: 8px;
@@ -53,15 +54,30 @@
     }
     .profile {
       display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 10px;
       margin-top: auto;
     }
     .profile img {
-      width: 32px;
-      height: 32px;
+      width: 40px;
+      height: 40px;
       border-radius: 50%;
+      margin-bottom: 10px;
     }
+    .logout {
+      margin-top: 10px;
+      padding: 12px 16px;
+      width: 100%;
+      background: #222;
+      color: var(--text);
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: bold;
+      transition: background 0.2s ease, transform 0.1s ease;
+    }
+    .logout:hover { background: #333; transform: scale(1.05); }
     /* Main content */
     .main {
       flex: 1;
@@ -96,8 +112,28 @@
       cursor: pointer;
       box-shadow: 0 4px 10px rgba(0,0,0,0.4);
     }
-    .widget:hover {
-      background: #222;
+    .widget:hover { background: #222; }
+    /* Context menu */
+    .context-menu {
+      position: absolute;
+      background: #1f1f1f;
+      border: 1px solid #333;
+      border-radius: 6px;
+      display: none;
+      flex-direction: column;
+      z-index: 1000;
+    }
+    .context-menu button {
+      background: none;
+      border: none;
+      color: var(--text);
+      padding: 8px 14px;
+      text-align: left;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .context-menu button:hover {
+      background: #333;
     }
   </style>
 </head>
@@ -105,14 +141,12 @@
   <div class="sidebar">
     <div>
       <h2>Folders</h2>
-      <div class="folders" id="folderList">
-        <!-- dynamic folders will appear here -->
-      </div>
+      <div class="folders" id="folderList"></div>
       <button class="add-folder-btn" id="addFolderBtn">+ Add Folder</button>
     </div>
     <div class="profile">
       <img src="https://ui-avatars.com/api/?name=User" alt="profile" />
-      <button onclick="logout()">Logout</button>
+      <button class="logout" onclick="logout()">Logout</button>
     </div>
   </div>
 
@@ -121,7 +155,6 @@
       <h1>Dashboard</h1>
       <input type="text" class="search" placeholder="Search..." />
     </div>
-
     <div class="widgets">
       <div class="widget">Create Note</div>
       <div class="widget">View Folder</div>
@@ -132,19 +165,101 @@
     </div>
   </div>
 
+  <div class="context-menu" id="contextMenu">
+    <button onclick="addSubfolder()">New Subfolder</button>
+    <button onclick="renameFolder()">Rename</button>
+    <button onclick="deleteFolder()">Delete</button>
+  </div>
+
   <script>
     const folderList = document.getElementById('folderList');
     const addFolderBtn = document.getElementById('addFolderBtn');
+    const contextMenu = document.getElementById('contextMenu');
+    let selectedFolder = null;
+
+    function createFolder(name = "Untitled Folder", parent = folderList) {
+      const div = document.createElement('div');
+      div.className = 'folder';
+      div.textContent = name;
+      div.draggable = true;
+
+      // Right click for context menu
+      div.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        selectedFolder = div;
+        contextMenu.style.display = 'flex';
+        contextMenu.style.left = e.pageX + "px";
+        contextMenu.style.top = e.pageY + "px";
+      });
+
+      // Rename with Enter
+      div.addEventListener('dblclick', () => startRename(div));
+
+      // Drag & drop
+      div.addEventListener('dragstart', () => {
+        selectedFolder = div;
+        div.classList.add('dragging');
+      });
+      div.addEventListener('dragend', () => {
+        div.classList.remove('dragging');
+      });
+      div.addEventListener('dragover', (e) => e.preventDefault());
+      div.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const dragged = document.querySelector('.dragging');
+        if (dragged && dragged !== div) {
+          dragged.classList.add('subfolder');
+          div.appendChild(dragged);
+        }
+      });
+
+      parent.appendChild(div);
+    }
+
+    function startRename(folder) {
+      const oldName = folder.textContent;
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = oldName;
+      folder.textContent = '';
+      folder.appendChild(input);
+      input.focus();
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          folder.textContent = input.value.trim() || oldName;
+        } else if (e.key === 'Escape') {
+          folder.textContent = oldName;
+        }
+      });
+      input.addEventListener('blur', () => {
+        folder.textContent = input.value.trim() || oldName;
+      });
+    }
 
     addFolderBtn.addEventListener('click', () => {
-      const name = prompt("Enter folder name:");
-      if (name) {
-        const div = document.createElement('div');
-        div.className = 'folder';
-        div.contentEditable = true; // allows rename
-        div.innerText = name;
-        folderList.appendChild(div);
+      createFolder();
+    });
+
+    // Context menu actions
+    function addSubfolder() {
+      if (selectedFolder) {
+        createFolder("New Subfolder", selectedFolder);
       }
+      contextMenu.style.display = 'none';
+    }
+    function renameFolder() {
+      if (selectedFolder) startRename(selectedFolder);
+      contextMenu.style.display = 'none';
+    }
+    function deleteFolder() {
+      if (selectedFolder) selectedFolder.remove();
+      contextMenu.style.display = 'none';
+    }
+
+    // Close context menu on click elsewhere
+    document.addEventListener('click', () => {
+      contextMenu.style.display = 'none';
     });
 
     function logout() {
