@@ -5,124 +5,116 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Reminders • PIM</title>
   <style>
-    :root{--bg:#0a0a0a;--panel:#111;--card:#161616;--ink:#f5f5f5;--muted:#bdbdbd;--border:#2a2a2a;--accent:#fff}
+    :root {
+      --bg:#0a0a0a; --card:#111; --ink:#f5f5f5; --muted:#bdbdbd;
+      --field:#1f1f1f; --border:#333; --accent:#fff; --accent-ink:#000;
+    }
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-    .wrap{max-width:900px;margin:24px auto;padding:0 16px}
-    .topbar{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
-    .back{color:var(--muted);text-decoration:none;border:1px solid var(--border);padding:6px 10px;border-radius:8px}
-    .card{background:var(--card);border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:16px}
-    .row{display:grid;grid-template-columns:2fr 1fr 120px;gap:10px}
-    input,button{padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:#141414;color:var(--ink)}
-    button{background:var(--accent);color:#000;border:1px solid rgba(255,255,255,.35);font-weight:700;cursor:pointer}
-    .list{margin-top:16px}
-    .item{display:flex;justify-content:space-between;align-items:center;background:#1b1b1b;border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:8px}
-    .meta{color:var(--muted);font-size:12px}
-    .danger{background:#2a1515;border-color:#4a2a2a;color:#ffbdbd}
-    .ok{color:#a7ffcf;font-size:13px;margin-top:10px;min-height:18px}
+    .wrap{max-width:800px;margin:24px auto;padding:0 16px}
+    .top{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+    .back{color:var(--muted);text-decoration:none;padding:6px 10px;border:1px solid var(--border);border-radius:8px}
+    .back:hover{background:#121212}
+    .card{background:var(--card);border:1px solid rgba(255,255,255,.2);border-radius:14px;padding:18px;box-shadow:0 8px 24px rgba(0,0,0,.5)}
+    h1{margin:0 0 14px}
+    label{display:block;font-size:13px;color:var(--muted);margin:10px 0 6px}
+    input{width:100%;background:var(--field);border:1px solid var(--border);color:var(--ink);padding:10px 12px;border-radius:10px}
+    input:focus{border-color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.12);outline:none}
+    .btn{margin-top:14px;padding:10px 14px;border:1px solid rgba(255,255,255,.5);background:var(--accent);color:var(--accent-ink);border-radius:10px;font-weight:700;cursor:pointer}
+    .list{margin-top:20px;display:grid;gap:10px}
+    .rem{background:#151515;border:1px solid #2d2d2d;border-radius:10px;padding:12px;display:flex;justify-content:space-between;align-items:center}
+    .muted{color:var(--muted);font-size:12px}
+    .btn.small{padding:6px 10px;font-size:13px}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <div class="topbar">
+    <div class="top">
       <a class="back" href="dashboard.html">← Back</a>
-      <h2>Reminders</h2>
+      <h1>Reminders</h1>
     </div>
 
     <div class="card">
-      <div class="row">
-        <input id="text" placeholder="Reminder text (e.g., Call Alice)"/>
-        <input id="when" type="datetime-local"/>
-        <button id="add">Add</button>
-      </div>
-      <div id="msg" class="ok"></div>
-      <div class="list" id="list"></div>
+      <label for="title">Reminder Title</label>
+      <input id="title" placeholder="e.g., Meeting with team"/>
+
+      <label for="time">When</label>
+      <input id="time" type="datetime-local"/>
+
+      <button class="btn" onclick="addReminder()">Add Reminder</button>
+
+      <div class="list" id="reminderList"></div>
     </div>
   </div>
 
   <script>
     const username = localStorage.getItem("username") || "guest";
-    const sessionId = localStorage.getItem("sessionId");
-    if (!sessionId) location.href = "login.html";
-    const KEY = `${username}_reminders`;
+    const REM_KEY = `${username}_reminders`;
 
-    const msgEl = document.getElementById("msg");
-    const textEl = document.getElementById("text");
-    const whenEl = document.getElementById("when");
-    const listEl = document.getElementById("list");
-    const addBtn = document.getElementById("add");
+    function loadReminders(){
+      return JSON.parse(localStorage.getItem(REM_KEY) || "[]");
+    }
+    function saveReminders(rem){ localStorage.setItem(REM_KEY, JSON.stringify(rem)); }
 
-    const uid=()=>Math.random().toString(36).slice(2)+Date.now().toString(36);
-
-    function load(){ try{return JSON.parse(localStorage.getItem(KEY)||"[]");}catch{return []} }
-    function save(items){ localStorage.setItem(KEY, JSON.stringify(items)); }
-    function render(){
-      const items = load().sort((a,b)=>a.when.localeCompare(b.when));
-      listEl.innerHTML = "";
-      items.forEach(r=>{
-        const row=document.createElement("div");row.className="item";
-        const left=document.createElement("div");left.innerHTML=`<div>${r.text}</div><div class="meta">${new Date(r.when).toLocaleString()}</div>`;
-        const right=document.createElement("div");
-        const del=document.createElement("button"); del.textContent="Delete"; del.className="danger"; del.onclick=()=>{ remove(r.id); };
-        right.appendChild(del);
-        row.append(left,right);
-        listEl.appendChild(row);
+    function renderReminders(){
+      const list = document.getElementById("reminderList");
+      const rems = loadReminders();
+      list.innerHTML="";
+      rems.forEach((r,i)=>{
+        const div=document.createElement("div");
+        div.className="rem";
+        div.innerHTML=`<div><div>${r.title}</div><div class="muted">${new Date(r.time).toLocaleString()}</div></div>`;
+        const btn=document.createElement("button");
+        btn.className="btn small"; btn.textContent="Delete";
+        btn.onclick=()=>{ 
+          const arr=loadReminders(); arr.splice(i,1); saveReminders(arr); renderReminders();
+        };
+        div.appendChild(btn);
+        list.appendChild(div);
       });
     }
-    function remove(id){
-      const items = load().filter(x=>x.id!==id);
-      save(items); render();
+
+    function addReminder(){
+      const title=document.getElementById("title").value.trim();
+      const time=document.getElementById("time").value;
+      if(!title||!time){alert("Enter title and time");return;}
+      const arr=loadReminders();
+      arr.push({title,time});
+      saveReminders(arr);
+      renderReminders();
+      document.getElementById("title").value="";
+      document.getElementById("time").value="";
     }
 
+    // --- Notifications ---
     async function ensurePermission(){
-      if (!("Notification" in window)) return false;
-      if (Notification.permission === "granted") return true;
-      if (Notification.permission !== "denied"){
-        const res = await Notification.requestPermission();
-        return res === "granted";
+      if(Notification.permission==="default"){
+        await Notification.requestPermission();
       }
-      return false;
     }
 
-    addBtn.addEventListener("click", async ()=>{
-      msgEl.textContent="";
-      const text=textEl.value.trim();
-      const when=whenEl.value;
-      if (!text || !when){ msgEl.textContent="Please provide text and time."; return; }
-      const ok = await ensurePermission();
-      if (!ok) msgEl.textContent="Notifications are blocked. We'll fallback to alerts.";
-
-      const items = load();
-      items.push({ id: uid(), text, when, fired:false });
-      save(items);
-      textEl.value=""; whenEl.value="";
-      render();
-      msgEl.textContent="Reminder saved.";
-    });
-
-    // background checker
-    setInterval(()=>{
-      const now = Date.now();
-      const items = load();
-      let changed=false;
-      items.forEach(r=>{
-        if (!r.fired){
-          const t = new Date(r.when).getTime();
-          if (t && now>=t){
-            r.fired = true; changed=true;
-            if ("Notification" in window && Notification.permission==="granted"){
-              new Notification("Reminder", { body: r.text });
-            }else{
-              alert("Reminder: " + r.text);
-            }
+    function checkReminders(){
+      const now=new Date();
+      const arr=loadReminders();
+      arr.forEach((r,i)=>{
+        const when=new Date(r.time);
+        if(when<=now){
+          if(Notification.permission==="granted"){
+            new Notification("Reminder",{body:r.title});
+          }else{
+            alert("Reminder: "+r.title);
           }
+          arr.splice(i,1);
+          saveReminders(arr);
+          renderReminders();
         }
       });
-      if (changed){ save(items); render(); }
-    }, 15000); // check every 15s
+    }
 
-    // init
-    (async ()=>{ await ensurePermission(); render(); })();
+    // --- Init ---
+    ensurePermission();
+    renderReminders();
+    setInterval(checkReminders,30*1000); // check every 30s
   </script>
 </body>
 </html>
