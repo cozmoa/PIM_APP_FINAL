@@ -5,10 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Notes • PIM</title>
   <style>
-    :root{
-      --bg:#0a0a0a; --card:#111; --ink:#f5f5f5; --muted:#bdbdbd;
-      --field:#1f1f1f; --border:#333; --accent:#fff; --accent-ink:#000
-    }
+    :root{--bg:#0a0a0a;--card:#111;--ink:#f5f5f5;--muted:#bdbdbd;--field:#1f1f1f;--border:#333;--accent:#fff;--accent-ink:#000}
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);color:var(--ink);font:15px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
     .wrap{max-width:980px;margin:24px auto;padding:0 16px}
@@ -17,7 +14,7 @@
     .back:hover{background:#121212}
     .card{background:var(--card);border:1px solid rgba(255,255,255,.18);border-radius:14px;padding:18px;box-shadow:0 10px 24px rgba(0,0,0,.5)}
     .list{display:grid;gap:10px}
-    .note{display:grid;grid-template-columns:1fr 220px 170px;gap:10px;align-items:center;background:#151515;border:1px solid #2d2d2d;border-radius:10px;padding:12px}
+    .note{display:grid;grid-template-columns:1fr 220px 200px;gap:10px;align-items:center;background:#151515;border:1px solid #2d2d2d;border-radius:10px;padding:12px}
     .title{font-weight:700}
     .muted{color:var(--muted);font-size:12px}
     select,input,textarea{background:var(--field);border:1px solid var(--border);color:var(--ink);border-radius:8px;padding:8px 10px}
@@ -26,15 +23,10 @@
     .row{display:flex;gap:8px;justify-content:flex-end}
     .empty{padding:14px;color:var(--muted)}
     .searchBar{margin:10px 0;width:100%;padding:10px;background:#1a1a1a;border:1px solid #333;border-radius:10px;color:var(--ink)}
-    /* Edit dialog */
-    dialog{border:none;border-radius:12px;background:#141414;color:var(--ink);padding:24px;border:1px solid #333;width:85%;max-width:900px}
+    dialog{border:none;border-radius:12px;background:#141414;color:var(--ink);padding:20px;border:1px solid #333;width:80%;max-width:900px}
     dialog::backdrop{background:rgba(0,0,0,.6)}
-    .editForm{display:flex;flex-direction:column;gap:16px}
-    .editForm h2{margin:0 0 8px}
-    .editForm label{display:flex;flex-direction:column;gap:6px;font-size:14px}
-    .editForm input{font-size:16px;padding:12px 14px;width:100%}
-    .editForm textarea{font-size:15px;line-height:1.5;padding:14px;width:100%;min-height:350px;resize:vertical}
-    .editActions{display:flex;gap:10px;justify-content:flex-end;margin-top:10px}
+    .grid2{display:grid;gap:10px}
+    textarea.big{min-height:300px;resize:vertical}
   </style>
 </head>
 <body>
@@ -44,7 +36,7 @@
       <h1>Notes</h1>
     </div>
 
-    <input id="search" class="searchBar" placeholder="Search notes by title or content…"/>
+    <input id="search" class="searchBar" placeholder="Search notes by title, content, or tags…"/>
 
     <div class="card">
       <div id="notes" class="list"></div>
@@ -52,16 +44,14 @@
     </div>
   </div>
 
+  <!-- Edit dialog -->
   <dialog id="editDlg">
-    <form method="dialog" class="editForm">
+    <form method="dialog" class="grid2">
       <h2>Edit Note</h2>
-      <label>Title
-        <input id="editTitle" />
-      </label>
-      <label>Content
-        <textarea id="editBody"></textarea>
-      </label>
-      <div class="editActions">
+      <label>Title <input id="editTitle"/></label>
+      <label>Content <textarea id="editBody" class="big"></textarea></label>
+      <label>Tags (comma separated) <input id="editTags"/></label>
+      <div class="row">
         <button class="btn warn" value="cancel">Cancel</button>
         <button class="btn" value="ok">Save</button>
       </div>
@@ -69,11 +59,15 @@
   </dialog>
 
   <script>
-    const API_BASE = location.hostname.includes('localhost') ? 'http://127.0.0.1:8000' : 'https://pim-app-final.onrender.com';
-    const sessionId = localStorage.getItem('sessionId'); if(!sessionId) location.href='login.html';
-    const username = localStorage.getItem('username') || 'guest';
-    const FOLDERS_KEY = `${username}_foldersTree`;
-    const NOTE_FOLDER_KEY = `${username}_noteFolders`;
+    const API_BASE = location.hostname.includes('localhost') 
+      ? 'http://127.0.0.1:8000' 
+      : 'https://pim-app-final.onrender.com';
+
+    const sessionId = localStorage.getItem('sessionId'); 
+    if(!sessionId) location.href='login.html';
+
+    let allNotes = [];
+    let editingOriginalTitle = null;
 
     const notesEl = document.getElementById('notes');
     const emptyEl = document.getElementById('empty');
@@ -81,107 +75,100 @@
     const editDlg = document.getElementById('editDlg');
     const editTitle = document.getElementById('editTitle');
     const editBody = document.getElementById('editBody');
+    const editTags = document.getElementById('editTags');
 
-    let allNotes = [];
-    let editingOriginalTitle = null;
-
-    function uid(){ return Math.random().toString(36).slice(2)+Date.now().toString(36); }
-    function loadTree(){ return JSON.parse(localStorage.getItem(FOLDERS_KEY) || '[]'); }
-    function ensureIds(tree){ tree.forEach(n=>{ if(!n.id) n.id=uid(); n.children=n.children||[]; ensureIds(n.children); }); return tree; }
-    function flatten(tree,prefix=''){ const out=[]; for(const n of tree){ const label=prefix?`${prefix} / ${n.name}`:n.name; out.push({id:n.id,label}); if(n.children?.length) out.push(...flatten(n.children,label)); } return out; }
-
+    // Load notes
     async function loadNotes(){
-      const res=await fetch(`${API_BASE}/notes`,{headers:{Authorization:`Bearer ${sessionId}`}});
-      const data=await res.json().catch(()=>({}));
-      allNotes=res.ok?(data?.data?.notes||[]):[];
+      const res = await fetch(`${API_BASE}/notes`, {
+        headers:{ Authorization:`Bearer ${sessionId}` }
+      });
+      const data = await res.json().catch(()=> ({}));
+      allNotes = res.ok ? (data?.data?.notes||[]) : [];
       render();
     }
 
+    // Render notes
     function render(filter=''){
       notesEl.innerHTML='';
-      const map=JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY)||'{}');
-      const flatFolders=flatten(ensureIds(loadTree()));
-      const notes=filter
-        ? allNotes.filter(n=>n.title.toLowerCase().includes(filter)||(n.content||'').toLowerCase().includes(filter))
+      const notes = filter
+        ? allNotes.filter(n => {
+            const text = (n.title + " " + (n.content||"") + " " + (n.tags||[]).join(",")).toLowerCase();
+            return text.includes(filter.toLowerCase());
+          })
         : allNotes;
+
       if(!notes.length){ emptyEl.style.display='block'; return; }
       emptyEl.style.display='none';
+
       for(const n of notes){
         const row=document.createElement('div'); row.className='note';
         const left=document.createElement('div');
-        left.innerHTML=`<div class="title">${n.title}</div><div class="muted">Modified: ${n.modified_at}</div>`;
-        const folderSel=document.createElement('select');
-        folderSel.innerHTML=`<option value="">— No folder —</option>`+flatFolders.map(f=> `<option value="${f.id}">${f.label}</option>`).join('');
-        if(map[n.title]) folderSel.value=map[n.title];
-        folderSel.onchange=()=>{
-          const m=JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY)||'{}');
-          if(folderSel.value) m[n.title]=folderSel.value; else delete m[n.title];
-          localStorage.setItem(NOTE_FOLDER_KEY,JSON.stringify(m));
-        };
+        left.innerHTML=`<div class="title">${n.title}</div>
+                        <div class="muted">Tags: ${(n.tags||[]).join(", ")||"—"} | Modified: ${n.modified_at}</div>`;
+
+        const folderInfo=document.createElement('div');
+        folderInfo.className="muted";
+        folderInfo.textContent="(Folder link if any)"; // placeholder
+
         const actions=document.createElement('div'); actions.className='row';
-        const btnView=document.createElement('button'); btnView.className='btn warn'; btnView.textContent='View'; btnView.onclick=()=>viewNote(n.title);
-        const btnEdit=document.createElement('button'); btnEdit.className='btn'; btnEdit.textContent='Edit'; btnEdit.onclick=()=>openEdit(n);
-        const btnDel=document.createElement('button'); btnDel.className='btn warn'; btnDel.textContent='Delete'; btnDel.onclick=()=>delNote(n.title);
+        const btnView=document.createElement('button'); btnView.className='btn warn'; btnView.textContent='View';
+        btnView.onclick=()=>viewNote(n.title);
+        const btnEdit=document.createElement('button'); btnEdit.className='btn'; btnEdit.textContent='Edit';
+        btnEdit.onclick=()=>openEdit(n);
+        const btnDel=document.createElement('button'); btnDel.className='btn warn'; btnDel.textContent='Delete';
+        btnDel.onclick=()=>delNote(n.title);
+
         actions.append(btnView,btnEdit,btnDel);
-        row.append(left,folderSel,actions);
+        row.append(left,folderInfo,actions);
         notesEl.appendChild(row);
       }
     }
 
     async function viewNote(title){
-      const res=await fetch(`${API_BASE}/notes/${encodeURIComponent(title)}`,{headers:{Authorization:`Bearer ${sessionId}`}});
+      const res=await fetch(`${API_BASE}/notes/${encodeURIComponent(title)}`,{
+        headers:{Authorization:`Bearer ${sessionId}`}
+      });
       const data=await res.json();
-      if(!res.ok){alert(data?.detail||'Failed');return;}
-      alert(`${data.data.note.title}\n\n${data.data.note.content}`);
+      if(!res.ok){ alert(data?.detail||'Failed'); return; }
+      alert(`${data.data.note.title}\n\n${data.data.note.content}\n\nTags: ${(data.data.note.tags||[]).join(", ")}`);
     }
 
     function openEdit(n){
       editingOriginalTitle=n.title;
       editTitle.value=n.title;
-      fetch(`${API_BASE}/notes/${encodeURIComponent(n.title)}`,{headers:{Authorization:`Bearer ${sessionId}`}})
-        .then(r=>r.json()).then(d=>{
-          editBody.value=d?.data?.note?.content||'';
-          editDlg.showModal();
-        });
+      editBody.value=n.content||"";
+      editTags.value=(n.tags||[]).join(", ");
+      editDlg.showModal();
     }
 
     editDlg.addEventListener('close',async()=>{
       if(editDlg.returnValue!=='ok') return;
       const newTitle=editTitle.value.trim();
       const newBody=editBody.value.trim();
+      const tags=editTags.value.split(",").map(t=>t.trim()).filter(Boolean);
+
       if(!newTitle||!newBody){ alert('Title and content required'); return; }
+
       try{
-        if(newTitle!==editingOriginalTitle){
-          await fetch(`${API_BASE}/notes/${encodeURIComponent(editingOriginalTitle)}`,{
-            method:'PUT',headers:{'Content-Type':'application/json',Authorization:`Bearer ${sessionId}`},
-            body:JSON.stringify({content:newBody})
-          });
-          await fetch(`${API_BASE}/notes`,{
-            method:'POST',headers:{'Content-Type':'application/json',Authorization:`Bearer ${sessionId}`},
-            body:JSON.stringify({title:newTitle,content:newBody})
-          });
-          await fetch(`${API_BASE}/notes/${encodeURIComponent(editingOriginalTitle)}`,{method:'DELETE',headers:{Authorization:`Bearer ${sessionId}`}});
-          const m=JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY)||'{}');
-          if(m[editingOriginalTitle]){ m[newTitle]=m[editingOriginalTitle]; delete m[editingOriginalTitle]; localStorage.setItem(NOTE_FOLDER_KEY,JSON.stringify(m)); }
-        }else{
-          await fetch(`${API_BASE}/notes/${encodeURIComponent(newTitle)}`,{
-            method:'PUT',headers:{'Content-Type':'application/json',Authorization:`Bearer ${sessionId}`},
-            body:JSON.stringify({content:newBody})
-          });
-        }
+        // Update
+        await fetch(`${API_BASE}/notes/${encodeURIComponent(editingOriginalTitle)}`,{
+          method:'PUT',
+          headers:{'Content-Type':'application/json',Authorization:`Bearer ${sessionId}`},
+          body:JSON.stringify({content:newBody,tags})
+        });
         loadNotes();
-      }catch(e){alert(e.message||'Save failed');}
+      }catch(e){ alert(e.message||'Save failed'); }
     });
 
     async function delNote(title){
       if(!confirm(`Delete "${title}"?`)) return;
-      await fetch(`${API_BASE}/notes/${encodeURIComponent(title)}`,{method:'DELETE',headers:{Authorization:`Bearer ${sessionId}`}});
-      const m=JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY)||'{}');
-      if(m[title]){delete m[title]; localStorage.setItem(NOTE_FOLDER_KEY,JSON.stringify(m));}
+      await fetch(`${API_BASE}/notes/${encodeURIComponent(title)}`,{
+        method:'DELETE',headers:{Authorization:`Bearer ${sessionId}`}
+      });
       loadNotes();
     }
 
-    searchEl.addEventListener('input',()=>render(searchEl.value.trim().toLowerCase()));
+    searchEl.addEventListener('input',()=> render(searchEl.value.trim()));
     loadNotes();
   </script>
 </body>

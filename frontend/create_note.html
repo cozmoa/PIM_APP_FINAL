@@ -1,8 +1,8 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Create Note • PIM</title>
   <style>
     :root {
@@ -39,7 +39,7 @@
   <div class="wrap">
     <div class="topbar">
       <a class="back" href="dashboard.html">← Back</a>
-      <span class="hint">Tip: you can file a note into a folder right away.</span>
+      <span class="hint">Tip: you can assign tags and a folder when creating a note.</span>
     </div>
 
     <div class="card">
@@ -51,6 +51,9 @@
 
           <label for="content">Body</label>
           <textarea id="content" placeholder="Write your note..."></textarea>
+
+          <label for="tags">Tags (comma separated)</label>
+          <input id="tags" placeholder="e.g., work, urgent, research" />
         </div>
 
         <div>
@@ -62,7 +65,7 @@
             <button id="btnSave">Save</button>
             <button id="btnNewFolder" type="button">+ New Folder</button>
           </div>
-          <p class="hint">Folders are stored per-user in your browser. Notes content is saved to the backend.</p>
+          <p class="hint">Folders are stored per-user in your browser. Notes content + tags are saved to the backend.</p>
         </div>
       </div>
 
@@ -84,24 +87,14 @@
 
     // ---------- Storage keys ----------
     const FOLDERS_KEY = `${username}_foldersTree`;
-    const LEGACY_FLAT_KEY = `${username}_folders`;
-    const NOTE_FOLDER_KEY = `${username}_noteFolders`; // { [title]: folderId }
+    const NOTE_FOLDER_KEY = `${username}_noteFolders`; 
 
     // ---------- Folder helpers ----------
     function uid(){ return Math.random().toString(36).slice(2) + Date.now().toString(36); }
 
     function loadFoldersTree(){
-      const modern = localStorage.getItem(FOLDERS_KEY);
-      if (modern) return JSON.parse(modern);
-
-      // migrate legacy flat list if present
-      const legacy = localStorage.getItem(LEGACY_FLAT_KEY);
-      if (legacy){
-        const arr = JSON.parse(legacy).map(name => ({ id: uid(), name, children: [] }));
-        localStorage.setItem(FOLDERS_KEY, JSON.stringify(arr));
-        return arr;
-      }
-      return [];
+      const raw = localStorage.getItem(FOLDERS_KEY);
+      return raw ? JSON.parse(raw) : [];
     }
     function saveFoldersTree(tree){ localStorage.setItem(FOLDERS_KEY, JSON.stringify(tree)); }
 
@@ -109,19 +102,10 @@
       const out = [];
       tree.forEach(node => {
         const label = prefix ? `${prefix} / ${node.name}` : node.name;
-        out.push({ id: node.id, name: node.name, label });
+        out.push({ id: node.id, label });
         if (node.children?.length) out.push(...flattenFolders(node.children, label));
       });
       return out;
-    }
-
-    function ensureIds(tree){
-      tree.forEach(n => {
-        if (!n.id) n.id = uid();
-        if (!Array.isArray(n.children)) n.children = [];
-        ensureIds(n.children);
-      });
-      return tree;
     }
 
     function addFolderModal(){
@@ -130,13 +114,12 @@
       const tree = loadFoldersTree();
       tree.push({ id: uid(), name: name.trim(), children: [] });
       saveFoldersTree(tree);
-      populateFolderPicker(); // refresh options
+      populateFolderPicker();
     }
 
     function populateFolderPicker(){
       const pick = document.getElementById("folderPick");
-      const tree = ensureIds(loadFoldersTree());
-      // reset
+      const tree = loadFoldersTree();
       pick.innerHTML = `<option value="">— No folder —</option>`;
       const flat = flattenFolders(tree);
       flat.forEach(f => {
@@ -147,10 +130,12 @@
       });
     }
 
-    // ---------- Note save ----------
+    // ---------- Save Note ----------
     async function saveNote(){
       const title = document.getElementById("title").value.trim();
       const content = document.getElementById("content").value.trim();
+      const tags = document.getElementById("tags").value
+        .split(",").map(t=>t.trim()).filter(Boolean);
       const folderId = document.getElementById("folderPick").value;
 
       const msg = document.getElementById("msg");
@@ -169,13 +154,11 @@
             "Authorization": "Bearer " + sessionId,
             "Content-Type": "application/json"
           },
-          // IMPORTANT: backend expects 'content', not 'body'
-          body: JSON.stringify({ title, content })
+          body: JSON.stringify({ title, content, tags })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data?.detail || data?.message || "Failed to save note");
 
-        // map to folder (local) if chosen
         if (folderId){
           const map = JSON.parse(localStorage.getItem(NOTE_FOLDER_KEY) || "{}");
           map[title] = folderId;
