@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 
 # Import your database system
-from main import NoteDatabaseSystem
+from backend.main import NoteDatabaseSystem
 
 app = FastAPI(title="Notes & Todos API", version="1.0.0")
 security = HTTPBearer()
