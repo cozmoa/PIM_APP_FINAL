@@ -6,124 +6,62 @@
   <title>Dashboard • PIM</title>
   <style>
     :root {
-      --bg: #0a0a0a;
-      --sidebar-bg: #111;
-      --card-bg: #1a1a1a;
-      --text: #f5f5f5;
-      --muted: #bdbdbd;
-      --accent: #fff;
+      --bg:#0a0a0a; --sidebar-bg:#111; --card-bg:#1a1a1a;
+      --text:#f5f5f5; --muted:#bdbdbd; --accent:#fff;
     }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      height: 100vh;
-      display: flex;
-      background: var(--bg);
-      color: var(--text);
-      font: 15px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{
+      height:100vh;display:flex;
+      background:var(--bg);color:var(--text);
+      font:15px system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial;
     }
-    /* Sidebar */
-    .sidebar {
-      width: 260px;
-      background: var(--sidebar-bg);
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
+    .sidebar{
+      width:260px;background:var(--sidebar-bg);
+      padding:20px;display:flex;flex-direction:column;justify-content:space-between;
     }
-    .folders { margin-top: 20px; }
-    .folder {
-      padding: 8px 10px;
-      border-radius: 8px;
-      background: #222;
-      margin-bottom: 8px;
-      cursor: pointer;
+    .folders{margin-top:20px}
+    .folder{
+      padding:8px 10px;border-radius:8px;
+      background:#222;margin-bottom:8px;cursor:pointer;
     }
-    .folder:hover { background: #333; }
-    .subfolder { margin-left: 20px; }
-    .add-folder-btn {
-      margin-top: 12px;
-      padding: 8px;
-      background: var(--accent);
-      color: var(--bg);
-      border: none;
-      border-radius: 6px;
-      cursor: pointer;
-      font-weight: bold;
+    .folder:hover{background:#333}
+    .subfolder{margin-left:20px}
+    .add-folder-btn{
+      margin-top:12px;padding:8px;
+      background:var(--accent);color:var(--bg);
+      border:none;border-radius:6px;cursor:pointer;font-weight:bold;
     }
-    .profile {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      margin-top: auto;
+    .profile{display:flex;flex-direction:column;align-items:center;margin-top:auto}
+    .profile img{width:40px;height:40px;border-radius:50%;margin-bottom:10px}
+    .logout{
+      margin-top:10px;padding:12px 16px;width:100%;
+      background:#222;color:var(--text);border:none;border-radius:8px;
+      cursor:pointer;font-size:15px;font-weight:bold;
+      transition:background .2s ease,transform .1s ease;
     }
-    .profile img {
-      width: 40px;
-      height: 40px;
-      border-radius: 50%;
-      margin-bottom: 10px;
+    .logout:hover{background:#333;transform:scale(1.05)}
+    .main{flex:1;padding:20px;display:flex;flex-direction:column}
+    .topbar{display:flex;justify-content:space-between;align-items:center}
+    .search{
+      padding:8px 10px;border-radius:8px;border:none;
+      background:#1f1f1f;color:var(--text);width:260px;
     }
-    .logout {
-      margin-top: 10px;
-      padding: 12px 16px;
-      width: 100%;
-      background: #222;
-      color: var(--text);
-      border: none;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 15px;
-      font-weight: bold;
-      transition: background 0.2s ease, transform 0.1s ease;
+    .widgets{margin-top:20px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+    .widget{
+      background:var(--card-bg);border-radius:12px;padding:20px;
+      text-align:center;cursor:pointer;box-shadow:0 4px 10px rgba(0,0,0,.4);
+      transition:background .2s ease;
     }
-    .logout:hover { background: #333; transform: scale(1.05); }
-    /* Main content */
-    .main {
-      flex: 1;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
+    .widget:hover{background:#222}
+    .context-menu{
+      position:absolute;background:#1f1f1f;border:1px solid #333;
+      border-radius:6px;display:none;flex-direction:column;z-index:1000;
     }
-    .topbar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
+    .context-menu button{
+      background:none;border:none;color:var(--text);
+      padding:8px 14px;text-align:left;cursor:pointer;font-size:14px;
     }
-    .search {
-      padding: 8px 10px;
-      border-radius: 8px;
-      border: none;
-      background: #1f1f1f;
-      color: var(--text);
-      width: 260px;
-    }
-    .widgets {
-      margin-top: 20px;
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 16px;
-    }
-    .widget {
-      background: var(--card-bg);
-      border-radius: 12px;
-      padding: 20px;
-      text-align: center;
-      cursor: pointer;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-      transition: background 0.2s ease;
-    }
-    .widget:hover { background: #222; }
-    .results {
-      margin-top: 20px;
-    }
-    .note {
-      background: #1b1b1b;
-      padding: 12px;
-      margin-bottom: 10px;
-      border-radius: 10px;
-      border: 1px solid #333;
-    }
-    .note h3 { margin: 0 0 4px; }
-    .note p { margin: 0; color: var(--muted); font-size: 14px; }
+    .context-menu button:hover{background:#333}
   </style>
 </head>
 <body>
@@ -134,7 +72,7 @@
       <button class="add-folder-btn" id="addFolderBtn">+ Add Folder</button>
     </div>
     <div class="profile">
-      <img src="https://ui-avatars.com/api/?name=User" alt="profile" />
+      <img src="https://ui-avatars.com/api/?name=User" alt="profile"/>
       <button class="logout" onclick="logout()">Logout</button>
     </div>
   </div>
@@ -142,104 +80,131 @@
   <div class="main">
     <div class="topbar">
       <h1>Dashboard</h1>
-      <input type="text" class="search" id="searchBar" placeholder="Search notes..."/>
+      <input type="text" class="search" id="search" placeholder="Search notes…"/>
     </div>
     <div class="widgets">
       <div class="widget" onclick="window.location.href='create_note.html'">Create Note</div>
-      <div class="widget" onclick="window.location.href='view_folder.html'">View Folder</div>
+      <div class="widget" onclick="window.location.href='view_folder.html'">View Folders</div>
       <div class="widget" onclick="window.location.href='todo.html'">Todo List</div>
       <div class="widget" onclick="window.location.href='notes.html'">View Notes</div>
       <div class="widget" onclick="window.location.href='stats.html'">Stats</div>
     </div>
+  </div>
 
-    <div class="results" id="results"></div>
+  <div class="context-menu" id="contextMenu">
+    <button onclick="addSubfolder()">New Subfolder</button>
+    <button onclick="renameFolder()">Rename</button>
+    <button onclick="deleteFolder()">Delete</button>
   </div>
 
   <script>
-    const API_BASE = location.hostname.includes("localhost")
-      ? "http://127.0.0.1:8000"
-      : "https://pim-app-final.onrender.com";
-
-    const sessionId = localStorage.getItem("sessionId");
     const username = localStorage.getItem("username") || "guest";
-    if (!sessionId) location.href = "login.html";
-
     const FOLDERS_KEY = `${username}_foldersTree`;
-    const NOTE_FOLDER_KEY = `${username}_noteFolders`;
-
     const folderList = document.getElementById("folderList");
     const addFolderBtn = document.getElementById("addFolderBtn");
-    const searchBar = document.getElementById("searchBar");
-    const resultsEl = document.getElementById("results");
+    const contextMenu = document.getElementById("contextMenu");
+    let selectedFolder = null;
 
-    // ---------- Folder functions ----------
-    function uid(){ return Math.random().toString(36).slice(2) + Date.now().toString(36); }
-    function loadFoldersTree(){ return JSON.parse(localStorage.getItem(FOLDERS_KEY) || "[]"); }
-    function saveFoldersTree(tree){ localStorage.setItem(FOLDERS_KEY, JSON.stringify(tree)); }
+    function uid(){ return Math.random().toString(36).slice(2)+Date.now().toString(36); }
+    function loadTree(){ return JSON.parse(localStorage.getItem(FOLDERS_KEY) || "[]"); }
+    function saveTree(tree){ localStorage.setItem(FOLDERS_KEY, JSON.stringify(tree)); }
 
-    function createFolder(name = "Untitled Folder", parent = folderList) {
-      const div = document.createElement("div");
-      div.className = "folder";
-      div.textContent = name;
-      div.draggable = true;
-      parent.appendChild(div);
-      saveFoldersTree(loadFoldersTree().concat([{id: uid(), name, children: []}]));
-    }
+    // Render recursively
+    function renderTree(tree, parentEl){
+      parentEl.innerHTML="";
+      tree.forEach(node=>{
+        const div=document.createElement("div");
+        div.className="folder"; div.textContent=node.name; div.dataset.id=node.id; div.draggable=true;
 
-    addFolderBtn.addEventListener("click", () => {
-      const name = prompt("Enter folder name:");
-      if (name) createFolder(name);
-    });
-
-    function logout() {
-      localStorage.removeItem("sessionId");
-      localStorage.removeItem("username");
-      window.location.href = "login.html";
-    }
-
-    // ---------- Search Notes ----------
-    async function fetchNotes(){
-      try {
-        const res = await fetch(`${API_BASE}/notes`, {
-          headers: { Authorization: "Bearer " + sessionId }
+        div.addEventListener("contextmenu",e=>{
+          e.preventDefault(); selectedFolder=node;
+          contextMenu.style.display="flex"; contextMenu.style.left=e.pageX+"px"; contextMenu.style.top=e.pageY+"px";
         });
-        const data = await res.json();
-        return res.ok ? (data?.data?.notes || []) : [];
-      } catch(e){
-        return [];
-      }
-    }
+        div.addEventListener("dblclick",()=> startRename(node));
 
-    async function handleSearch(){
-      const q = searchBar.value.trim().toLowerCase();
-      resultsEl.innerHTML = "";
-      if (!q) return;
+        // drag & drop
+        div.addEventListener("dragstart",()=>{selectedFolder=node; div.classList.add("dragging");});
+        div.addEventListener("dragend",()=>{div.classList.remove("dragging"); saveTree(treeData); renderTree(treeData, folderList);});
+        div.addEventListener("dragover",e=>e.preventDefault());
+        div.addEventListener("drop",e=>{
+          e.preventDefault();
+          const dragged=document.querySelector(".dragging");
+          if(dragged&&dragged!==div){
+            const draggedId=dragged.dataset.id;
+            const draggedNode=findNode(treeData,draggedId);
+            removeNode(treeData,draggedId);
+            node.children=node.children||[];
+            node.children.push(draggedNode);
+            saveTree(treeData); renderTree(treeData,folderList);
+          }
+        });
 
-      const notes = await fetchNotes();
-      const matches = notes.filter(n =>
-        n.title.toLowerCase().includes(q) ||
-        (n.content||"").toLowerCase().includes(q) ||
-        (n.tags||[]).some(tag => tag.toLowerCase().includes(q))
-      );
-
-      if (!matches.length){
-        resultsEl.innerHTML = "<p style='color:var(--muted)'>No matches found.</p>";
-        return;
-      }
-
-      matches.forEach(n => {
-        const div = document.createElement("div");
-        div.className = "note";
-        div.innerHTML = `
-          <h3>${n.title}</h3>
-          <p>${(n.content||"").slice(0,120)}...</p>
-          <p class="muted">Tags: ${(n.tags||[]).join(", ") || "none"}</p>
-        `;
-        resultsEl.appendChild(div);
+        parentEl.appendChild(div);
+        if(node.children&&node.children.length){
+          const sub=document.createElement("div");
+          sub.className="subfolder";
+          renderTree(node.children,sub);
+          parentEl.appendChild(sub);
+        }
       });
     }
 
-    searchBar.addEventListener("input", handleSearch);
+    function findNode(tree,id){
+      for(const n of tree){
+        if(n.id===id) return n;
+        const child=findNode(n.children||[],id);
+        if(child) return child;
+      }
+      return null;
+    }
+    function removeNode(tree,id){
+      for(let i=0;i<tree.length;i++){
+        if(tree[i].id===id){tree.splice(i,1);return true;}
+        if(removeNode(tree[i].children||[],id)) return true;
+      }
+      return false;
+    }
+
+    function startRename(node){
+      const newName=prompt("Rename folder:",node.name);
+      if(newName&&newName.trim()){node.name=newName.trim();saveTree(treeData);renderTree(treeData,folderList);}
+    }
+
+    function addSubfolder(){
+      if(selectedFolder){
+        selectedFolder.children=selectedFolder.children||[];
+        selectedFolder.children.push({id:uid(),name:"New Subfolder",children:[]});
+        saveTree(treeData);renderTree(treeData,folderList);
+      }
+      contextMenu.style.display="none";
+    }
+    function renameFolder(){
+      if(selectedFolder) startRename(selectedFolder);
+      contextMenu.style.display="none";
+    }
+    function deleteFolder(){
+      if(selectedFolder){
+        removeNode(treeData,selectedFolder.id);
+        saveTree(treeData);renderTree(treeData,folderList);
+      }
+      contextMenu.style.display="none";
+    }
+
+    addFolderBtn.addEventListener("click",()=>{
+      treeData.push({id:uid(),name:"Untitled Folder",children:[]});
+      saveTree(treeData);renderTree(treeData,folderList);
+    });
+
+    document.addEventListener("click",()=> contextMenu.style.display="none");
+
+    function logout(){
+      localStorage.removeItem("sessionId");
+      localStorage.removeItem("username");
+      window.location.href="login.html";
+    }
+
+    let treeData=loadTree();
+    renderTree(treeData,folderList);
   </script>
 </body>
 </html>
