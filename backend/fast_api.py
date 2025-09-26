@@ -10,7 +10,6 @@ from datetime import datetime
 import json
 import os
 from .main import NoteDatabaseSystem  # package-relative
-# (NoteDatabase is used inside the system)
 
 app = FastAPI(title="Notes & Todos API", version="1.0.0")
 
@@ -20,7 +19,7 @@ app.mount("/frontend", StaticFiles(directory=FRONTEND_DIR), name="frontend")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # simple
+    allow_origins=["*"],  # simple CORS
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -46,12 +45,14 @@ class UserRegister(BaseModel):
     @classmethod
     def vu(cls, v): 
         v = v.strip()
-        if not v or len(v) < 3 or len(v) > 50: raise ValueError("Username must be 3-50 chars")
+        if not v or len(v) < 3 or len(v) > 50: 
+            raise ValueError("Username must be 3-50 chars")
         return v
     @field_validator("password")
     @classmethod
     def vp(cls, v):
-        if not v or len(v) < 6: raise ValueError("Password must be at least 6 chars")
+        if not v or len(v) < 6: 
+            raise ValueError("Password must be at least 6 chars")
         return v
 
 class UserLogin(BaseModel):
@@ -77,7 +78,8 @@ class NoteCreate(BaseModel):
     @classmethod
     def vt(cls, v):
         v = v.strip()
-        if not v or len(v) > 200: raise ValueError("Title must be 1-200 chars")
+        if not v or len(v) > 200: 
+            raise ValueError("Title must be 1-200 chars")
         return v
     @field_validator("content")
     @classmethod
@@ -106,12 +108,14 @@ class TodoCreate(BaseModel):
     @classmethod
     def vt(cls, v):
         v = v.strip()
-        if not v or len(v) > 200: raise ValueError("Title must be 1-200 chars")
+        if not v or len(v) > 200: 
+            raise ValueError("Title must be 1-200 chars")
         return v
     @field_validator("priority")
     @classmethod
     def vp(cls, v):
-        if v not in {"low", "normal", "high"}: raise ValueError("Priority must be low, normal, or high")
+        if v not in {"low", "normal", "high"}: 
+            raise ValueError("Priority must be low, normal, or high")
         return v
     @field_validator("description")
     @classmethod
@@ -150,17 +154,6 @@ class AssignNoteFolder(BaseModel):
     def vt(cls, v):
         v = v.strip()
         if not v: raise ValueError("Title is required")
-        return v
-
-# reminders
-class ReminderCreate(BaseModel):
-    text: str
-    time: str
-    @field_validator("text")
-    @classmethod
-    def vt(cls, v):
-        v = v.strip()
-        if not v: raise ValueError("Text is required")
         return v
 
 # ---------- auth helper ----------
@@ -338,31 +331,6 @@ async def remove_folder(folder_id: int, username: str = Depends(get_current_user
     if not result["success"]: raise HTTPException(status_code=404, detail=result["message"])
     return create_response(True, {"deleted_folder_id": folder_id}, result["message"])
 
-# ---------- reminders ----------
-@app.get("/reminders")
-async def get_reminders(username: str = Depends(get_current_user)):
-    sid = get_session_id(username)
-    if not sid: raise HTTPException(status_code=401, detail="Session not found")
-    result = json.loads(notes_system.list_reminders(sid))
-    if not result["success"]: raise HTTPException(status_code=400, detail=result["message"])
-    return create_response(True, result["items"], "Reminders fetched")
-
-@app.post("/reminders")
-async def create_reminder(rem: ReminderCreate, username: str = Depends(get_current_user)):
-    sid = get_session_id(username)
-    if not sid: raise HTTPException(status_code=401, detail="Session not found")
-    result = json.loads(notes_system.create_reminder(sid, rem.text, rem.time))
-    if not result["success"]: raise HTTPException(status_code=400, detail=result["message"])
-    return create_response(True, {"id": result["id"]}, result["message"])
-
-@app.delete("/reminders/{reminder_id}")
-async def delete_reminder(reminder_id: int, username: str = Depends(get_current_user)):
-    sid = get_session_id(username)
-    if not sid: raise HTTPException(status_code=401, detail="Session not found")
-    result = json.loads(notes_system.delete_reminder(sid, reminder_id))
-    if not result["success"]: raise HTTPException(status_code=404, detail=result["message"])
-    return create_response(True, {"deleted_reminder_id": reminder_id}, result["message"])
-
 # ---------- stats ----------
 @app.get("/stats")
 async def get_user_stats(username: str = Depends(get_current_user)):
@@ -370,13 +338,11 @@ async def get_user_stats(username: str = Depends(get_current_user)):
     if not sid: raise HTTPException(status_code=401, detail="Session not found")
     result = json.loads(notes_system.get_stats(sid))
     if not result["success"]: raise HTTPException(status_code=400, detail=result["message"])
-    # return flattened data {notes,todos,folders,reminders,...}
     return create_response(True, result["data"], "Statistics retrieved successfully")
 
 # ---------- root redirect ----------
 @app.get("/")
 async def root():
-    # front splash/loader if present; else JSON info
     index = os.path.join(FRONTEND_DIR, "loading.html")
     if os.path.exists(index):
         return RedirectResponse(url="/frontend/loading.html")
@@ -389,7 +355,6 @@ async def root():
                 "notes": ["/notes", "/notes/{title}", "/notes/search/{query}"],
                 "todos": ["/todos", "/todos/{todo_id}"],
                 "folders": ["/folders", "/folders/{id}", "/folders/assign-note"],
-                "reminders": ["/reminders"],
                 "other": ["/stats", "/health", "/test"],
             },
             "docs": "/docs",
