@@ -1,7 +1,7 @@
 # backend/main.py
 import json
 import uuid
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict
 from .database import NoteDatabase
 
 
@@ -215,42 +215,16 @@ class NoteDatabaseSystem:
         ok = self.db.delete_folder(uid, folder_id)
         return json.dumps({"success": ok, "message": "Folder deleted" if ok else "Folder not found"})
 
-    # -------- reminders --------
-    def create_reminder(self, session_id: str, text: str, time: str) -> str:
-        uid = self._uid(session_id)
-        if not uid:
-            return json.dumps({"success": False, "message": "Not logged in"})
-        if not text.strip() or not time:
-            return json.dumps({"success": False, "message": "Text and time are required"})
-        rid = self.db.create_reminder(uid, text.strip(), time)
-        return json.dumps({"success": True, "id": rid, "message": "Reminder created"})
-
-    def list_reminders(self, session_id: str) -> str:
-        uid = self._uid(session_id)
-        if not uid:
-            return json.dumps({"success": False, "message": "Not logged in"})
-        items = self.db.list_reminders(uid)
-        return json.dumps({"success": True, "items": items})
-
-    def delete_reminder(self, session_id: str, reminder_id: int) -> str:
-        uid = self._uid(session_id)
-        if not uid:
-            return json.dumps({"success": False, "message": "Not logged in"})
-        ok = self.db.delete_reminder(uid, reminder_id)
-        return json.dumps({"success": ok, "message": "Reminder deleted" if ok else "Reminder not found"})
-
     # -------- stats --------
     def get_stats(self, session_id: str) -> str:
         uid = self._uid(session_id)
         if not uid:
             return json.dumps({"success": False, "message": "Not logged in"})
         stats = self.db.get_user_stats(uid)
-        # Flatten keys to match your stats.html expectations
         data = {
             "notes": stats["total_notes"],
             "todos": stats["total_todos"],
             "folders": stats["total_folders"],
-            "reminders": stats["total_reminders"],
             "tags": stats["total_tags"],
             "recent_note": stats["recent_note"],
         }
